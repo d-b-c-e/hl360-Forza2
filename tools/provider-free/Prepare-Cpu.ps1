@@ -3,6 +3,7 @@ param([Parameter(Mandatory)][string]$Evidence,[Parameter(Mandatory)][string]$Che
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot Owner-State.ps1)
 . (Join-Path $PSScriptRoot Contract.ps1)
+. (Join-Path $PSScriptRoot Environment.ps1)
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot ../..));$Evidence=[IO.Path]::GetFullPath($Evidence)
 if(-not(Test-ReadbackWithin $Evidence (Join-Path $root _local/provider-free))-or(Test-Path $Evidence)){throw 'Fresh project CPU plan required'}
 $source=@{root=$root;commit=(Get-Bo3Git $root @('rev-parse','HEAD'))};Assert-Bo3Source $source
@@ -12,9 +13,7 @@ if($canonicalA-cne$canonicalB){throw 'Scratch suite pins differ'}
 $sdk='E:\Source\game-modding\dbce-mods-forza-motorsport-2\_sdk\win-amd64'
 $tools=@{pwsh=(Get-Process -Id $PID).Path;cmake='C:\Program Files\CMake\bin\cmake.exe';clang='C:\Program Files\LLVM\bin\clang.exe';clangxx='C:\Program Files\LLVM\bin\clang++.exe';ninja='C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe';readobj='C:\Program Files\LLVM\bin\llvm-readobj.exe'}
 $tools.lld='C:\Program Files\LLVM\bin\lld-link.exe';$tools.cmd=$env:ComSpec;$tools.console=Join-Path ([Environment]::GetFolderPath('System')) conhost.exe
-$setupText=Get-Content (Join-Path $CheapB msvc-environment.stdout.txt)
-$buildPath=($setupText|Where-Object{$_.StartsWith('PATH=')}) -replace '^PATH=',''
-foreach($toolName in @('link','rc','mt')){$found=@($buildPath.Split(';')|Where-Object{$_-and(Test-Path -LiteralPath (Join-Path $_ ($toolName+'.exe')))}|Select-Object -First 1);if(-not$found.Count){throw ('Build tool missing: '+$toolName)};$tools[$toolName]=Join-Path $found[0] ($toolName+'.exe')}
+$msvcTools=Get-Fm2MsvcTools $CheapB;foreach($toolName in $msvcTools.Keys){$tools[$toolName]=$msvcTools[$toolName]}
 $pins=@(foreach($v in $tools.Values){Assert-ReadbackPlain $v;@{path=$v;bytes=(Get-Item -LiteralPath $v).Length;sha256=(Get-ReadbackSha $v)}})
 $hostAudit=@{reader='E:\Source\dbce-project-mgmt\tools\desktop-routes\Read-HostSurfaceImports.ps1';catalog='E:\Source\dbce-project-mgmt\tools\desktop-routes\host-surface-imports.json'}
 $hostAudit.pins=@(foreach($v in @($hostAudit.reader,$hostAudit.catalog)){@{path=$v;sha256=(Get-ReadbackSha $v)}})

@@ -73,6 +73,9 @@ try{
  $fences=@(Select-String -LiteralPath (Join-Path $root src/provider_free_network.def) -Pattern '^FM2_NET\((\w+),'|ForEach-Object{$_.Matches[0].Groups[1].Value}|Sort-Object -Unique)
  if($imports.Count-ne40-or(Compare-Object $imports $fences)){throw 'Compiled network import fence incomplete'};$r.networkImports=$imports
  Set-Fm2BuildEnvironment $Evidence
+ $msvcTools=Get-Fm2MsvcTools $Evidence
+ if($msvcTools-isnot[hashtable]-or$msvcTools.Count-ne3){throw 'Actual CPU-plan MSVC tool extraction failed'}
+ foreach($name in @('link','rc','mt')){if(-not(Test-Path -LiteralPath $msvcTools[$name])-or$msvcTools[$name]-cne[IO.Path]::GetFullPath($msvcTools[$name])){throw 'Actual MSVC canonical tool path missing'}};$r.actualMsvcToolPaths=$msvcTools
  $sdk='E:\Source\game-modding\dbce-mods-forza-motorsport-2\_sdk\win-amd64'
  $r.sdkPins=@(Get-Bo3Rows (Join-Path $sdk include/rex/input)) + @('bin/rexruntime.dll','lib/rexruntime.lib','share/rexglue/rex_app.cpp','share/rexglue/windowed_app_main_sdl.cpp' | ForEach-Object {$pin=Join-Path $sdk $_;@{path=$pin;bytes=(Get-Item -LiteralPath $pin).Length;sha256=(Get-ReadbackSha $pin)}})
  Copy-Item -LiteralPath (Join-Path $sdk bin/rexruntime.dll) -Destination $Evidence

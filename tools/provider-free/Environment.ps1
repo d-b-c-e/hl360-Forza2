@@ -10,3 +10,12 @@ function Set-Fm2BuildEnvironment([string]$Evidence,[scriptblock]$Tick){
  foreach($line in $environmentText.Split("`n")){if($line.TrimEnd("`r")-match'^(INCLUDE|LIB|LIBPATH|PATH)=(.*)$'){[Environment]::SetEnvironmentVariable($Matches[1],$Matches[2],'Process')}}
  if(-not$env:INCLUDE-or-not$env:LIB){throw 'Incomplete MSVC environment'}
 }
+function Get-Fm2MsvcTools([string]$Evidence){
+ $text=Read-Bo3Text (Join-Path $Evidence msvc-environment.stdout.txt) 131072
+ if(-not$text){throw 'Complete MSVC environment evidence required'}
+ [string]$pathLine=$text.Split("`n")|Where-Object{$_.StartsWith('PATH=',[StringComparison]::OrdinalIgnoreCase)}|Select-Object -First 1
+ if(-not$pathLine){throw 'MSVC PATH evidence missing'}
+ $folders=$pathLine.Substring(5).TrimEnd("`r").Split(';');$result=@{}
+ foreach($toolName in @('link','rc','mt')){$found=@($folders|Where-Object{$_-and(Test-Path -LiteralPath (Join-Path $_ ($toolName+'.exe')))}|Select-Object -First 1);if(-not$found.Count){throw ('Build tool missing: '+$toolName)};$result[$toolName]=[IO.Path]::GetFullPath((Join-Path $found[0] ($toolName+'.exe')))}
+ return $result
+}
