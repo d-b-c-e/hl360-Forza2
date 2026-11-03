@@ -107,7 +107,29 @@ and lease without a forced stop. Candidate46,103,040B SHA
 runtime/GPU tuple unchanged. Its complete no-load import inventory has36
 signals, requiring pinned offline explanations before live admission. WINMM
 imports are only timeBeginPeriod/timeEndPeriod, not wave endpoint functions.
-This candidate remains unrun.
+Live GO505726 subsequently ran only to its10s capture milestone and stopped
+on a runner failure before any Start/A pulse. Actual counters: inputSystems1,
+audioSystems1/driver1/995 acknowledged frames/zero failures,158 armed network
+registry entries,116 Present-wrapper calls, zero input consumption. Four
+byte-identical1282x752 WGC PNGs show a black client with the native titled SDL
+frame. This early sample does not qualify later rendering or vehicle response.
+
+The complete capture manifest lacked LF; an active-file reader incorrectly
+returned null. Cleanup then incorrectly Boolean-tested C# void VerifyDisplay,
+reporting a false topology mismatch. Game exited normally0, no force, hooks
+joined/released and job empty; lease retained until fresh independent2373-file/
+2613-numeric-metadata checks and exact display/foreground comparison passed.
+Supplemental recovery released at20:14:14.979893Z with no owner/display writes.
+Original qualificationE0EE4006 remains unchanged with its custody result;
+`cpu03/live/recovery-release.json` establishes FAIL_HARNESS_RELEASED.
+
+The corrected runner reads closed-producer JSON without requiring LF while
+active readers keep that rule, and calls the void display assertion directly.
+Regression fixtures cover both JSON endings, malformed/oversize refusal,
+unchanged active-tail admission, actual void success and actual mismatch refusal.
+A fresh attempt uses separately receipted private input copies and explicitly
+references the original unchanged CPU build receipt; it does not fabricate a
+new CPU build or overwrite the first run. All runtime retries require a fresh GO.
 
 `Prepare-Cpu.ps1` produces a clean-source/full-SDK/tool/shared-catalog plan.
 `Build.ps1` requires a fresh CPU GO and exclusive lease, at most1800s total,

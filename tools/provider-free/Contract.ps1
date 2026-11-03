@@ -25,9 +25,17 @@ function Write-Bo3Text([string]$Path,[string]$Text){
  [IO.File]::WriteAllText($tmp,$Text,[Text.UTF8Encoding]::new($false));[OutRunSnapshot]::Publish($tmp,$Path)
 }
 function Write-Bo3Json([string]$Path,$Value){Write-Bo3Text $Path (($Value|ConvertTo-Json -Depth 18)+"`n")}
-function Read-Bo3Text([string]$Path,[int]$Limit=65536){
+function Assert-Fm2Display { [CannonballLive]::VerifyDisplay() }
+# Closed producer JSON can omit LF. Active command/status readers retain LF
+# admission; call this only after the owned producer exited successfully.
+function Read-Fm2ClosedJson([string]$Path,[int]$Limit=1048576){
+ $text=Read-Bo3Text $Path $Limit $false
+ if($null-eq$text){throw 'Completed JSON file unavailable'}
+ $text|ConvertFrom-Json -DateKind String
+}
+function Read-Bo3Text([string]$Path,[int]$Limit=65536,[bool]$RequireLf=$true){
  $s=$null;$r=$null
- try{$s=[IO.FileStream]::new($Path,[IO.FileMode]::Open,[IO.FileAccess]::Read,([IO.FileShare]::ReadWrite-bor[IO.FileShare]::Delete));if($s.Length-gt$Limit){throw 'Active file budget exceeded'};$r=[IO.StreamReader]::new($s,[Text.UTF8Encoding]::new($false),$false);$text=$r.ReadToEnd();if(-not$text.EndsWith("`n")){return $null};return $text}
+ try{$s=[IO.FileStream]::new($Path,[IO.FileMode]::Open,[IO.FileAccess]::Read,([IO.FileShare]::ReadWrite-bor[IO.FileShare]::Delete));if($s.Length-gt$Limit){throw 'Active file budget exceeded'};$r=[IO.StreamReader]::new($s,[Text.UTF8Encoding]::new($false),$false);$text=$r.ReadToEnd();if($RequireLf-and-not$text.EndsWith("`n")){return $null};return $text}
  catch [IO.IOException]{return $null}finally{if($r){$r.Dispose()}elseif($s){$s.Dispose()}}
 }
 function Read-Bo3Status([string]$Path,[string]$Nonce,$Identity){

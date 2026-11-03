@@ -12,7 +12,8 @@ Assert-Bo3Source $fm2LivePlan.source;Assert-Bo3Rows $fm2LivePlan.sourcePins;Asse
 if(-not$fm2LivePlan.hostSurfacePins.Count){throw 'Frozen host-surface evidence required'};Assert-Bo3Rows $fm2LivePlan.hostSurfacePins
 foreach($rows in @($fm2LivePlan.dataRows,$fm2LivePlan.userRows,$fm2LivePlan.cacheRows)){Assert-Bo3Rows $rows}
 $e=$fm2LivePlan.evidence
-if((Get-ReadbackSha (Join-Path $e cpu-result.json))-cne$fm2LivePlan.cpuSha256){throw 'CPU receipt changed'}
+if(-not$fm2LivePlan.cpuReceiptPath-or(Get-ReadbackSha $fm2LivePlan.cpuReceiptPath)-cne$fm2LivePlan.cpuSha256){throw 'CPU receipt changed'}
+if($fm2LivePlan.privateInputReceipt){Assert-Bo3Rows @($fm2LivePlan.privateInputReceipt)}
 foreach($pair in @(@('Guard.dll',$fm2LivePlan.guardSha256),@('Snapshot.dll',$fm2LivePlan.snapshotSha256),@('OwnerIo.dll',$fm2LivePlan.ownerIoSha256))){$path=Join-Path $e $pair[0];if((Get-ReadbackSha $path)-cne$pair[1]){throw 'Frozen helper changed'};[void][Reflection.Assembly]::LoadFrom($path)}
 if((Get-ReadbackSha $fm2LivePlan.consoleHost)-cne$fm2LivePlan.consoleSha256){throw 'Canonical console host changed'}
 $live=Join-Path $e live;if(Test-Path $live){throw 'ONE live invocation; retain existing attempt'};Assert-ReadbackPlain $live;[void][IO.Directory]::CreateDirectory($live)
@@ -43,7 +44,7 @@ function Capture([string]$Label){
  if(-not$hwnd-or($c.hwnd-and$c.hwnd-ne$hwnd)){throw 'One exact stable owned SDL HWND required'};$c.hwnd=$hwnd
  $client=[CannonballLive]::ClientSize($hwnd,$c.owned.pid);$folder=Join-Path $live ('frames-'+$Label);$before=$c.last
  Invoke-Bo3Owned $fm2LivePlan.capture @([string]$c.owned.pid,$folder,'--hwnd',('0x{0:X}'-f$hwnd),'--duration','2','--max-frames','4') $live ('capture-'+$Label) $live 15 {Guard} $false|Out-Null
- $manifest=(Read-Bo3Text (Join-Path $folder capture.json) 1048576)|ConvertFrom-Json -DateKind String
+ $manifest=Read-Fm2ClosedJson (Join-Path $folder capture.json) 1048576
  if($manifest.status-cne'complete'-or$manifest.process-ne$c.owned.pid-or[DateTimeOffset]::Parse($manifest.processStartedUtc).UtcTicks-ne$c.owned.birth-or$manifest.window.Handle-ne$hwnd-or$manifest.saved-lt2){throw 'R2 completion/identity differs'}
  $last=0L;$rows=@();foreach($frame in $manifest.frames){$path=Join-Path $folder $frame.File;if(-not(Test-ReadbackWithin $path $folder)-or(Get-ReadbackSha $path)-cne$frame.Sha256-or$frame.SourceWidth-lt$client[0]-or$frame.SourceHeight-lt$client[1]-or$frame.Width-ne$frame.SourceWidth-or$frame.Height-ne$frame.SourceHeight-or[long]$frame.SystemRelativeTimeTicks-le$last-or[DateTimeOffset]::Parse($frame.ArrivedUtc).UtcTicks-lt$c.owned.birth){throw 'Fresh full-raster capture differs'};$last=[long]$frame.SystemRelativeTimeTicks;$rows+=@{file=$path;sha256=$frame.Sha256;width=$frame.Width;height=$frame.Height}}
  Write-Bo3Json (Join-Path $folder readback.json) @{identity=$c.owned;hwnd=$hwnd;client=$client;nativeBefore=$before;nativeAfter=$c.last;frames=$rows;distinct=@($rows.sha256|Sort-Object -Unique).Count;ownerAcceptance=$false};$c.captureCount++
@@ -103,7 +104,7 @@ $actions=@{
   $verifyExe=[CannonballLive]::ProcessIdentity($PID).image
   $verifyRoot=Invoke-Bo3Owned $verifyExe @('-NoProfile','-File',(Join-Path $PSScriptRoot Verify-Restored.ps1),'-Snapshot',(Join-Path $live owner-snapshot/manifest.json),'-ExpectedSha256',(Get-ReadbackSha (Join-Path $live owner-snapshot/manifest.json)),'-Out',(Join-Path $live independent-owner.json)) $live independent-owner $live 90 $null
   Write-Bo3Json (Join-Path $live verifier-identity.json) $verifyRoot
-  $verify=(Read-Bo3Text (Join-Path $live independent-owner.json))|ConvertFrom-Json;if(-not$verify.pass){throw 'Independent owner verifier failed'};if(-not[CannonballLive]::VerifyDisplay()){throw 'Display/topology differs'}
+  $verify=(Read-Bo3Text (Join-Path $live independent-owner.json))|ConvertFrom-Json;if(-not$verify.pass){throw 'Independent owner verifier failed'};Assert-Fm2Display
   $until=[DateTime]::UtcNow.AddSeconds(10);$roles=@{python=$verifyExe;candidate=$fm2LivePlan.exe;capture=$fm2LivePlan.capture;consoleHost=$fm2LivePlan.consoleHost}
   while([CannonballLive]::JobPids().Length-and[DateTime]::UtcNow-lt$until){Get-Bo3JobCensus $verifyRoot $roles $c.jobSeen (Join-Path $live verifier-identities.json);[Threading.Thread]::Sleep(25)}
   if([CannonballLive]::JobPids().Length){throw 'Verifier/console tail not quiescent'}

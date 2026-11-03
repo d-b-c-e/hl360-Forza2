@@ -20,6 +20,20 @@ $held=[IO.FileStream]::new($atomic,[IO.FileMode]::Open,[IO.FileAccess]::Read,([I
 try{Write-Bo3Text $atomic "second`n";Check ((Read-Bo3Text $atomic)-ceq"second`n") 'Parent replace/read with held shared-delete reader'}finally{$held.Dispose()}
 [IO.File]::WriteAllText($atomic,'partial');Check ($null-eq(Read-Bo3Text $atomic)) 'Partial tail retryable'
 Check ($null-eq(Read-Bo3Text (Join-Path $e missing))) 'Missing active file retryable'
+$closed=Join-Path $e closed.json;[IO.File]::WriteAllText($closed,'{"status":"complete","saved":4}')
+Check ($null-eq(Read-Bo3Text $closed)) 'Active reader still refuses LF-less tail'
+Check ((Read-Fm2ClosedJson $closed).saved-eq4) 'Completed producer JSON without LF accepted'
+[IO.File]::WriteAllText($closed,"{`"status`":`"complete`"}`n")
+Check ((Read-Fm2ClosedJson $closed).status-ceq'complete') 'Completed producer JSON with LF accepted'
+[IO.File]::WriteAllText($closed,'{"status":')
+$bad=$false;try{Read-Fm2ClosedJson $closed|Out-Null}catch{$bad=$true};Check $bad 'Malformed completed JSON refused'
+$bad=$false;try{Read-Fm2ClosedJson $closed 2|Out-Null}catch{$bad=$true};Check $bad 'Completed JSON size bound retained'
+$displayField=[CannonballLive].GetField('displayInitial',([Reflection.BindingFlags]::Static-bor[Reflection.BindingFlags]::NonPublic))
+$oldDisplay=$displayField.GetValue($null)
+try{
+ $displayField.SetValue($null,[CannonballLive]::DisplayIdentity());Assert-Fm2Display;Check $true 'Actual void display verifier success is not Boolean-tested'
+ $displayField.SetValue($null,'inert-mismatch');$bad=$false;try{Assert-Fm2Display}catch{$bad=$_.Exception.Message-like'*Display mode/topology differs*'};Check $bad 'Actual display mismatch still refuses'
+}finally{$displayField.SetValue($null,$oldDisplay)}
 $identity=@{pid=123;birth=639293000000000000L};$status=Join-Path $e status.json
 $good=@{schema='fm2.provider-free@1';nonce='0123456789abcdef0123456789abcdef';pid=123;birthFileTime=134381768000000000L;noHost=$true;controllers=0;inputSystems=1;networkBlocked=$true;registryNetEntries=40;audio='silent-ack';audioSystems=1;audioFailures=0;reason='';seq=1}
 # FILETIME uses the explicit .NET epoch offset, not locale/date parsing.
