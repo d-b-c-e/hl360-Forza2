@@ -34,6 +34,15 @@ Next is offline investigation of the car/loading transition, Present caller
 coverage and file/shader/audio traces. Keep all output fences and protected
 state. GO506277 is spent; no unchanged runtime retry is authorized.
 
+The next source-only diagnostic adds completed-Present/in-flight counters and
+publishes status from the existing real input consumer under the same80ms cap.
+The real wrapper still forwards to the original once, with default-off ordinary
+behavior preserved. The fixture supplies an inert original that invokes input
+while Present is in flight, then checks both in-flight and returned states.
+No new thread, host backend, timeout change or quit/fallback change is added.
+This successor needs its focused compile/fixture checks and a new full CPU build
+before any runtime request; it is not the F4DF5414 candidate that ran above.
+
 Source branch: `napo/forza2-provider-free-20261103`, isolated worktree
 `E:\Source\_work\napo-forza2-provider-free-20261103`, starting at
 `8cb28bca616ef5358f9f0ab7e67fff791f36efde`.

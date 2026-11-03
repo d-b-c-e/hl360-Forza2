@@ -38,6 +38,7 @@ std::string root, nonce, reason;
 std::function<void()> close_callback;
 uint64_t started = 0, accepted = 0, published = 0, reads = 0, frames = 0;
 uint64_t consumed_seq = 0, consumed = 0, packet = 0, birth = 0;
+uint64_t present_returns = 0;
 std::atomic<uint64_t> network_calls{0}, force_calls{0};
 std::atomic<uint64_t> input_systems{0};
 std::atomic<uint64_t> audio_systems{0}, audio_drivers{0}, audio_frames{0}, audio_failures{0};
@@ -119,10 +120,10 @@ void Publish(bool final = false) {
   std::snprintf(text, sizeof text,
     "{\"schema\":\"fm2.provider-free@1\",\"nonce\":\"%s\",\"pid\":%lu,\"birthFileTime\":%llu,"
     "\"noHost\":true,\"controllers\":0,\"inputSystems\":%llu,\"networkBlocked\":true,\"audio\":\"silent-ack\","
-    "\"seq\":%llu,\"consumedSeq\":%llu,\"consumed\":%llu,\"frames\":%llu,\"networkCalls\":%llu,\"registryNetEntries\":%llu,"
+    "\"seq\":%llu,\"consumedSeq\":%llu,\"consumed\":%llu,\"frames\":%llu,\"presentReturns\":%llu,\"presentInFlight\":%llu,\"networkCalls\":%llu,\"registryNetEntries\":%llu,"
     "\"forceCalls\":%llu,\"audioSystems\":%llu,\"audioDrivers\":%llu,\"audioFrames\":%llu,\"audioFailures\":%llu,\"buttons\":%d,\"lt\":%d,\"rt\":%d,\"lx\":%d,"
     "\"elapsedMs\":%llu,\"closing\":%s,\"final\":%s,\"reason\":\"%s\"}\n",
-    nonce.c_str(),GetCurrentProcessId(),birth,input_systems.load(),command.seq,consumed_seq,consumed,frames,
+    nonce.c_str(),GetCurrentProcessId(),birth,input_systems.load(),command.seq,consumed_seq,consumed,frames,present_returns,frames-present_returns,
     network_calls.load(),NetworkRegistryEntries(),force_calls.load(),audio_systems.load(),audio_drivers.load(),audio_frames.load(),audio_failures.load(),command.buttons,command.lt,command.rt,command.lx,
     now-started,close_sent?"true":"false",final?"true":"false",reason.c_str());
   unsigned long error = 0;
@@ -221,8 +222,18 @@ bool Input(uint32_t user, uint32_t pointer, uint8_t* base, uint32_t& result) {
   }
   ++consumed;
   if (command.seq != consumed_seq) {consumed_seq = command.seq; Trace();}
+  // Keep input/audio liveness observable while a Present is in flight or the
+  // title is loading without entering Present. Shares the existing80ms cap.
+  Publish();
   result = 0;
   return true;
+}
+void PresentReturned() {
+  if (!Enabled()) return;
+  std::lock_guard lock(mutex);
+  if (!running) return;
+  ++present_returns;
+  Publish();
 }
 bool Capabilities(uint32_t user,uint32_t pointer,uint8_t* base,uint32_t& result) {
   if (!Enabled()) return false;

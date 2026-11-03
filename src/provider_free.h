@@ -15,6 +15,7 @@ void PrivatePaths(rex::PathConfig& paths,const std::filesystem::path& executable
 void Start(std::function<void()> close);
 void Stop();
 void Frame();
+void PresentReturned();
 bool Input(uint32_t user, uint32_t pointer, uint8_t* base, uint32_t& result);
 bool Capabilities(uint32_t user, uint32_t pointer, uint8_t* base, uint32_t& result);
 void NetworkCall();

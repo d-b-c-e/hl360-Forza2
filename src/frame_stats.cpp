@@ -33,6 +33,7 @@ extern "C" void sub_8236CB28(PPCContext& __restrict ctx, uint8_t* base) {
   forza2::qualification::Frame();
   if (!REXCVAR_GET(frame_stats)) {
     __imp__sub_8236CB28(ctx, base);
+    forza2::qualification::PresentReturned();
     return;
   }
   static Stats stats;
@@ -65,5 +66,6 @@ extern "C" void sub_8236CB28(PPCContext& __restrict ctx, uint8_t* base) {
     stats.window_start = now;
   }
   __imp__sub_8236CB28(ctx, base);
+  forza2::qualification::PresentReturned();
 }
 

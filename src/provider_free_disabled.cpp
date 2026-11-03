@@ -9,6 +9,7 @@ void PrivatePaths(rex::PathConfig&,const std::filesystem::path&){}
 void Start(std::function<void()>){ }
 void Stop(){}
 void Frame(){}
+void PresentReturned(){}
 bool Input(uint32_t,uint32_t,uint8_t*,uint32_t&){return false;}
 bool Capabilities(uint32_t,uint32_t,uint8_t*,uint32_t&){return false;}
 void NetworkCall(){}

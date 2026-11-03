@@ -5,6 +5,12 @@
 #include <rex/ppc/context.h>
 #include <vector>
 
+// The real frame_stats wrapper calls this inert original, not a GPU/runtime.
+unsigned original_present_calls=0;
+std::function<void()> fixture_present_probe;
+extern "C" void __imp__sub_8236CB28(PPCContext&,uint8_t*){++original_present_calls;if(fixture_present_probe)fixture_present_probe();}
+extern "C" void sub_8236CB28(PPCContext&,uint8_t*);
+
 extern "C" void __imp__XamInputGetState(PPCContext&,uint8_t*);
 extern "C" void __imp__XamInputGetCapabilities(PPCContext&,uint8_t*);
 extern "C" void __imp__XamInputSetState(PPCContext&,uint8_t*);
@@ -23,6 +29,8 @@ int main(int argc,char** argv) {
   CHECK(CreateDirectoryA(fixture_root.c_str(),nullptr));
   std::vector<uint8_t> memory(0x3000,0xcc); uint32_t result=0;
   CHECK(!Input(0,0x1000,memory.data(),result));
+  PPCContext ordinary_present{};sub_8236CB28(ordinary_present,memory.data());
+  CHECK(original_present_calls==1&&frames==0&&present_returns==0);original_present_calls=0;
   rex::RuntimeConfig ordinary; Configure(ordinary); CHECK(!ordinary.input_factory);
   REXCVAR_SET(provider_free,true);
   REXCVAR_SET(provider_free_root,fixture_root);
@@ -80,6 +88,21 @@ int main(int argc,char** argv) {
   CHECK(uint16_t(pad->gamepad.buttons)==4096&&pad->gamepad.right_trigger==255&&
         pad->gamepad.left_trigger==127&&int16_t(pad->gamepad.thumb_lx)==-16000);
   CHECK(uint32_t(pad->packet_number)==1);
+  bool observed_in_flight=false;
+  fixture_present_probe=[&]{
+    Sleep(90);ctx.r3.u32=0;ctx.r5.u32=0x1000;__imp__XamInputGetState(ctx,memory.data());
+    char status[2048];unsigned long error=0;
+    observed_in_flight=fm2_pf_read((fixture_root+"/status.json").c_str(),status,sizeof status,&error)==1&&
+      std::strstr(status,"\"frames\":1,")&&std::strstr(status,"\"presentReturns\":0,")&&
+      std::strstr(status,"\"presentInFlight\":1,")&&std::strstr(status,"\"consumed\":2,");
+  };
+  sub_8236CB28(ctx,memory.data());fixture_present_probe={};
+  CHECK(original_present_calls==1&&observed_in_flight&&present_returns==1);
+  Sleep(90);ctx.r3.u32=0;ctx.r5.u32=0x1000;__imp__XamInputGetState(ctx,memory.data());
+  char completed_status[2048];unsigned long completed_error=0;
+  CHECK(fm2_pf_read((fixture_root+"/status.json").c_str(),completed_status,sizeof completed_status,&completed_error)==1);
+  CHECK(std::strstr(completed_status,"\"presentReturns\":1,")&&std::strstr(completed_status,"\"presentInFlight\":0,")&&std::strstr(completed_status,"\"consumed\":3,"));
+  const auto diagnostic_consumed=consumed;
   ctx.r3.u32=1;__imp__XamInputGetState(ctx,memory.data());CHECK(ctx.r3.u32==1167);
   ctx.r3.u32=0;ctx.r5.u32=0;__imp__XamInputGetState(ctx,memory.data());CHECK(ctx.r3.u32==1167);
   ctx.r3.u32=0;ctx.r5.u32=0x1100;__imp__XamInputGetCapabilities(ctx,memory.data());CHECK(ctx.r3.u32==0);
@@ -103,7 +126,7 @@ int main(int argc,char** argv) {
   CHECK(publish(make(2,0,0,0,0,0)));Sleep(25);
   ctx.r3.u32=0;ctx.r5.u32=0x1000;__imp__XamInputGetState(ctx,memory.data());CHECK(ctx.r3.u32==0);
   CHECK(uint16_t(pad->gamepad.buttons)==0&&pad->gamepad.right_trigger==0&&int16_t(pad->gamepad.thumb_lx)==0);
-  CHECK(consumed_seq==2&&consumed==2);
+  CHECK(consumed_seq==2&&consumed==diagnostic_consumed+1);
   // Stale active input is neutral and triggers the same native close callback.
   CHECK(publish(make(3,4096,0,255,16000,0)));Sleep(25);
   ctx.r3.u32=0;__imp__XamInputGetState(ctx,memory.data());CHECK(ctx.r3.u32==0);

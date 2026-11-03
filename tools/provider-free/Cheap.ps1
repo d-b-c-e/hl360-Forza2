@@ -99,7 +99,7 @@ try{
  Copy-Item -LiteralPath (Join-Path $sdk bin/rexruntime.dll) -Destination $Evidence
  $compiler='C:\Program Files\LLVM\bin\clang-cl.exe';$nativeExe=Join-Path $Evidence native-test.exe
  $defines=@(@('XamInputGetState','XamInputGetCapabilities','XamInputSetState','XamInputGetKeystroke')+$fences|ForEach-Object{'/D__imp__'+$_+'=Fm2Native_'+$_})
- $args=@('/nologo','/std:c++latest','/EHsc','/MD','/DWIN32','/DNOMINMAX','/DWIN32_LEAN_AND_MEAN','/DSPDLOG_COMPILED_LIB','/DSPDLOG_FMT_EXTERNAL','/DREX_HAS_D3D12=1','/clang:-msse4.1')+$defines+@(('/I'+$sdk+'/include'),'/Isrc','tests/provider_free/test_native.cpp','src/scripted_input.cpp','src/provider_free_io.c',('/Fe:'+ $nativeExe),('/Fo'+$Evidence+'\'),'/link',('/libpath:'+$sdk+'/lib'),'rexruntime.lib','fmt.lib','spdlog.lib')
+ $args=@('/nologo','/std:c++latest','/EHsc','/MD','/DWIN32','/DNOMINMAX','/DWIN32_LEAN_AND_MEAN','/DSPDLOG_COMPILED_LIB','/DSPDLOG_FMT_EXTERNAL','/DREX_HAS_D3D12=1','/clang:-msse4.1')+$defines+@(('/I'+$sdk+'/include'),'/Isrc','tests/provider_free/test_native.cpp','src/scripted_input.cpp','src/frame_stats.cpp','src/provider_free_io.c',('/Fe:'+ $nativeExe),('/Fo'+$Evidence+'\'),'/link',('/libpath:'+$sdk+'/lib'),'rexruntime.lib','fmt.lib','spdlog.lib')
  Invoke-Bo3Owned $compiler $args $root native-compile $Evidence 40 $null|Out-Null
  $syntaxArgs=@('/nologo','/std:c++latest','/EHsc','/MD','/DWIN32','/DNOMINMAX','/DWIN32_LEAN_AND_MEAN','/DSPDLOG_COMPILED_LIB','/DSPDLOG_FMT_EXTERNAL','/DREX_HAS_D3D12=1','/clang:-msse4.1')+$defines+@(('/I'+$sdk+'/include'),('/I'+$root),'/Isrc','/Igenerated/default','/Zs','src/main.cpp','src/frame_stats.cpp','src/provider_free_disabled.cpp')
  Invoke-Bo3Owned $compiler $syntaxArgs $root actual-host-syntax $Evidence 40 $null|Out-Null
