@@ -89,16 +89,24 @@ int main(int argc,char** argv) {
         pad->gamepad.left_trigger==127&&int16_t(pad->gamepad.thumb_lx)==-16000);
   CHECK(uint32_t(pad->packet_number)==1);
   bool observed_in_flight=false;
+  unsigned long in_flight_read_error=0;std::string in_flight_status;
+  // GetTickCount64 can advance in coarse ticks. Wait on that same clock;
+  // a fixed90ms sleep is insufficient to guarantee an80ms publication age.
+  auto publication_ready=[](){for(int retry=0;retry<100;++retry){if(GetTickCount64()-published>=100)return true;Sleep(5);}return false;};
   fixture_present_probe=[&]{
-    Sleep(90);ctx.r3.u32=0;ctx.r5.u32=0x1000;__imp__XamInputGetState(ctx,memory.data());
-    char status[2048];unsigned long error=0;
-    observed_in_flight=fm2_pf_read((fixture_root+"/status.json").c_str(),status,sizeof status,&error)==1&&
+    if(!publication_ready())return;
+    ctx.r3.u32=0;ctx.r5.u32=0x1000;__imp__XamInputGetState(ctx,memory.data());
+    char status[2048]{};
+    const bool read=fm2_pf_read((fixture_root+"/status.json").c_str(),status,sizeof status,&in_flight_read_error)==1;
+    in_flight_status=status;
+    observed_in_flight=read&&
       std::strstr(status,"\"frames\":1,")&&std::strstr(status,"\"presentReturns\":0,")&&
       std::strstr(status,"\"presentInFlight\":1,")&&std::strstr(status,"\"consumed\":2,");
   };
   sub_8236CB28(ctx,memory.data());fixture_present_probe={};
-  CHECK(original_present_calls==1&&observed_in_flight&&present_returns==1);
-  Sleep(90);ctx.r3.u32=0;ctx.r5.u32=0x1000;__imp__XamInputGetState(ctx,memory.data());
+  if(!observed_in_flight)std::fprintf(stderr,"inflight original=%u frames=%llu returns=%llu consumed=%llu readError=%lu reason=%s status=%s\n",original_present_calls,frames,present_returns,consumed,in_flight_read_error,reason.c_str(),in_flight_status.c_str());
+  CHECK(original_present_calls==1);CHECK(observed_in_flight);CHECK(present_returns==1);
+  CHECK(publication_ready());ctx.r3.u32=0;ctx.r5.u32=0x1000;__imp__XamInputGetState(ctx,memory.data());
   char completed_status[2048];unsigned long completed_error=0;
   CHECK(fm2_pf_read((fixture_root+"/status.json").c_str(),completed_status,sizeof completed_status,&completed_error)==1);
   CHECK(std::strstr(completed_status,"\"presentReturns\":1,")&&std::strstr(completed_status,"\"presentInFlight\":0,")&&std::strstr(completed_status,"\"consumed\":3,"));

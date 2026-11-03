@@ -42,6 +42,14 @@ while Present is in flight, then checks both in-flight and returned states.
 No new thread, host backend, timeout change or quit/fallback change is added.
 This successor needs its focused compile/fixture checks and a new full CPU build
 before any runtime request; it is not the F4DF5414 candidate that ran above.
+Diagnostic CPU506723 compiled and linked the fixture, then failed its first
+in-flight assertion; the second suite did not start. Nested/outer jobs and
+held handles closed, independent process audit passed and lease released in
+31.102s without a forced stop. The fixture's90ms sleep had insufficient margin
+against the80ms cap on coarse GetTickCount64 ticks. Its successor waits on the
+same production clock with a bounded loop and reports actual failure counters;
+production code, cap, assertions and timeouts are unchanged. The failed logs
+remain under diag01/diag-final01 for provenance; no unchanged retry follows.
 
 Source branch: `napo/forza2-provider-free-20261103`, isolated worktree
 `E:\Source\_work\napo-forza2-provider-free-20261103`, starting at
