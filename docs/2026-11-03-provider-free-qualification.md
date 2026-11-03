@@ -1,8 +1,38 @@
 # Native provider-free qualification, November 3
 
-Windows-only, opt-in source candidate. **Unbuilt and unrun** at this handoff;
-ordinary native launch, owner settings/install and physical behavior remain
-unqualified by this work. Public origin means local commits only.
+Windows-only, opt-in private candidate. CPU03 built successfully; latest live
+GO506277 is **BLOCKED at the progress gate, fully released**. Native scripted
+input and rendered menus were observed; loading completion/driving and physical
+behavior remain unqualified. Public origin means local commits only.
+
+## Latest live result: GO506277
+
+CandidateF4DF5414, harness65503977 and plan4752B1A6 ran444.443s including full
+snapshot/cleanup. Native input trace has3070 rows:22 Start,21 A and3027 neutral,
+last buttons/pedals/axes neutral. Last published counters:2383 Present-wrapper
+calls,3242 consumed, silent audio system1/driver1/52518 frames/zero failures,
+158 armed network entries/five network calls/3241 force calls intercepted.
+The last trace packet3372 continued beyond the last published state, while the
+frame counter stayed2383. A GPU failure or whole-process hang is not established.
+
+All16 saved1282x752 PNGs were hashed and their five distinct images inspected
+at original detail:10s introductory ribbon/logo geometry,80s main menu with
+Nissan/dbce/Arcade,160s Nissan Speedway track selection,310s Mitsubishi Eclipse
+car selection under a dark loading/tip overlay.370s/430s captures were not reached.
+No contact-sheet interpretation or unsampled blank-free/frame-pacing claim.
+
+The fixed runner read captures and verified displays correctly. It stopped
+when Present-wrapper/status publication failed to advance for15s. Native quit
+was requested, then the exact SDL/main HWND accepted normal WM_CLOSE after5s;
+exit0, no forced kill. Independent2373-file/2613-numeric-metadata owner check,
+exact display/foreground, passive LL0physical/0injected/0resets, full job/held
+handles, joined/released hooks and independent scoped process audit all passed.
+Lease released20:44:38Z, no custody. Raw qualification4D9189BE remains BLOCKED;
+`live02/live/review.json`82F17508 supplies the narrower evidence classification.
+
+Next is offline investigation of the car/loading transition, Present caller
+coverage and file/shader/audio traces. Keep all output fences and protected
+state. GO506277 is spent; no unchanged runtime retry is authorized.
 
 Source branch: `napo/forza2-provider-free-20261103`, isolated worktree
 `E:\Source\_work\napo-forza2-provider-free-20261103`, starting at
