@@ -130,6 +130,11 @@ unchanged active-tail admission, actual void success and actual mismatch refusal
 A fresh attempt uses separately receipted private input copies and explicitly
 references the original unchanged CPU build receipt; it does not fabricate a
 new CPU build or overwrite the first run. All runtime retries require a fresh GO.
+The live release also requires an independent private-scope Win32 process census
+after explicit owned-job/held-handle closure and before lease exit. Image paths
+and command paths are checked; exact operator PIDs are recorded as exclusions.
+Four fixtures cover both path consumers, sibling-prefix refusal and exclusions.
+Any remaining scoped process retains custody.
 
 `Prepare-Cpu.ps1` produces a clean-source/full-SDK/tool/shared-catalog plan.
 `Build.ps1` requires a fresh CPU GO and exclusive lease, at most1800s total,

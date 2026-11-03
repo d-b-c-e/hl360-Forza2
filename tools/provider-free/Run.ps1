@@ -110,7 +110,7 @@ $actions=@{
   if([CannonballLive]::JobPids().Length){throw 'Verifier/console tail not quiescent'}
  }
  StopObserver={if($c.observing){[CannonballLive]::Stop();$c.observing=$false;Write-Bo3Json (Join-Path $live guard-final.json) ([CannonballLive]::Snapshot())}}
- Release={if([CannonballLive]::JobPids().Length){throw 'Verifier console tail still active'};[CannonballLive]::ReleaseJob();Lease;&$leaseTool -Exit -Name $leaseName|Out-File (Join-Path $live lease-exit.txt);if(Test-Path $receipt){throw 'Named receipt remains'}}
+ Release={if([CannonballLive]::JobPids().Length){throw 'Verifier console tail still active'};[CannonballLive]::ReleaseJob();Assert-Fm2IndependentProcesses $live (Join-Path $live independent-process-audit.json);Lease;&$leaseTool -Exit -Name $leaseName|Out-File (Join-Path $live lease-exit.txt);if(Test-Path $receipt){throw 'Named receipt remains'}}
 }
 $result=Invoke-CannonballLifecycle $actions (Join-Path $live lifecycle.txt)
 if($result.status-ceq'PASS'-and-not$c.normal){$result.status='BLOCKED';$result.failure='Native exit nonzero'}

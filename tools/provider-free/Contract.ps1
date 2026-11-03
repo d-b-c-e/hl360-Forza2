@@ -26,6 +26,20 @@ function Write-Bo3Text([string]$Path,[string]$Text){
 }
 function Write-Bo3Json([string]$Path,$Value){Write-Bo3Text $Path (($Value|ConvertTo-Json -Depth 18)+"`n")}
 function Assert-Fm2Display { [CannonballLive]::VerifyDisplay() }
+function Find-Fm2ScopedProcesses([object[]]$Rows,[string]$Root,[int[]]$Excluded){
+ $prefix=[IO.Path]::GetFullPath($Root).TrimEnd('\')+'\'
+ foreach($row in $Rows){
+  if($row.ProcessId-in$Excluded){continue}
+  $image=([string]$row.ExecutablePath).Replace('/','\');$command=([string]$row.CommandLine).Replace('/','\')
+  if($image.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase)-or$command.IndexOf($prefix,[StringComparison]::OrdinalIgnoreCase)-ge0){$row}
+ }
+}
+function Assert-Fm2IndependentProcesses([string]$Root,[string]$Evidence){
+ $self=Get-CimInstance Win32_Process -Filter "ProcessId=$PID";$excluded=@($PID,$self.ParentProcessId)
+ $scoped=@(Find-Fm2ScopedProcesses @(Get-CimInstance Win32_Process) $Root $excluded|Select-Object ProcessId,ParentProcessId,CreationDate,ExecutablePath,CommandLine)
+ Write-Bo3Json $Evidence @{utc=[DateTime]::UtcNow.ToString('o');pass=($scoped.Count-eq0);scope=$Root;excludedOperatorPids=$excluded;scoped=$scoped;note='Independent scope audit supplements the explicit owned-job and held-handle closure'}
+ if($scoped.Count){throw 'Independent scoped process audit found remaining processes; custody retained'}
+}
 # Closed producer JSON can omit LF. Active command/status readers retain LF
 # admission; call this only after the owned producer exited successfully.
 function Read-Fm2ClosedJson([string]$Path,[int]$Limit=1048576){

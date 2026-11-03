@@ -34,6 +34,12 @@ try{
  $displayField.SetValue($null,[CannonballLive]::DisplayIdentity());Assert-Fm2Display;Check $true 'Actual void display verifier success is not Boolean-tested'
  $displayField.SetValue($null,'inert-mismatch');$bad=$false;try{Assert-Fm2Display}catch{$bad=$_.Exception.Message-like'*Display mode/topology differs*'};Check $bad 'Actual display mismatch still refuses'
 }finally{$displayField.SetValue($null,$oldDisplay)}
+$scope=Join-Path $e live
+$processRows=@(@{ProcessId=1;ExecutablePath=(Join-Path $scope bin/game.exe);CommandLine=''},@{ProcessId=2;ExecutablePath='C:/tool.exe';CommandLine=('tool "'+$scope.Replace('\','/')+'/input.json"')},@{ProcessId=3;ExecutablePath=($scope+'-other/bin/game.exe');CommandLine=''},@{ProcessId=4;ExecutablePath=(Join-Path $scope operator.exe);CommandLine=''})
+Check (@(Find-Fm2ScopedProcesses $processRows $scope @(4)).Count-eq2) 'Independent scope includes image and command consumers and excludes exact operator'
+Check (@(Find-Fm2ScopedProcesses @($processRows[2]) $scope @()).Count-eq0) 'Sibling prefix is not mistaken for the private scope'
+Check (@(Find-Fm2ScopedProcesses @() $scope @()).Count-eq0) 'Empty process census accepted'
+Check (@(Find-Fm2ScopedProcesses @($processRows[3]) $scope @()).Count-eq1) 'Scoped process without an operator exclusion remains visible'
 $identity=@{pid=123;birth=639293000000000000L};$status=Join-Path $e status.json
 $good=@{schema='fm2.provider-free@1';nonce='0123456789abcdef0123456789abcdef';pid=123;birthFileTime=134381768000000000L;noHost=$true;controllers=0;inputSystems=1;networkBlocked=$true;registryNetEntries=40;audio='silent-ack';audioSystems=1;audioFailures=0;reason='';seq=1}
 # FILETIME uses the explicit .NET epoch offset, not locale/date parsing.
