@@ -9,6 +9,7 @@ $fm2LivePlan=Read-Fm2Plan $Plan $ExpectedSha256 'fm2.live-plan@1'
 if($CheckPlanOnly){@{scopePass=$true;planType=$fm2LivePlan.GetType().FullName;game=$false;lease=$false;hooks=$false;owner=$false}|ConvertTo-Json;return}
 if(-not$fm2LivePlan.normalCloseOnly-or$fm2LivePlan.ownerWrite){throw 'Normal close/private state scope required'}
 Assert-Bo3Source $fm2LivePlan.source;Assert-Bo3Rows $fm2LivePlan.sourcePins;Assert-Bo3Rows $fm2LivePlan.products;Assert-Bo3Rows $fm2LivePlan.captureRows
+if(-not$fm2LivePlan.hostSurfacePins.Count){throw 'Frozen host-surface evidence required'};Assert-Bo3Rows $fm2LivePlan.hostSurfacePins
 foreach($rows in @($fm2LivePlan.dataRows,$fm2LivePlan.userRows,$fm2LivePlan.cacheRows)){Assert-Bo3Rows $rows}
 $e=$fm2LivePlan.evidence
 if((Get-ReadbackSha (Join-Path $e cpu-result.json))-cne$fm2LivePlan.cpuSha256){throw 'CPU receipt changed'}
@@ -64,10 +65,11 @@ $actions=@{
  }
  Arm={Guard;if((Get-ReadbackSha $fm2LivePlan.exe)-cne$fm2LivePlan.candidateSha256){throw 'Private native identity differs'}}
  Launch={
-  $previous=@{};try{foreach($key in @('APPDATA','LOCALAPPDATA','TEMP','TMP')){$previous[$key]=[Environment]::GetEnvironmentVariable($key,'Process');$dir=switch($key){APPDATA{'appdata'} LOCALAPPDATA{'localappdata'} default{'temp'}};[Environment]::SetEnvironmentVariable($key,(Join-Path $live $dir),'Process')}
+  Invoke-Fm2PrivateEnvironment $live {param($environment)
+   Write-Bo3Json (Join-Path $live child-environment.json) @{values=$environment;inheritedRexCvarsCleared=$true;forceRaise=$false;activateWhenShown=$false;activateWhenRaised=$false;mouseAutoCapture=$false}
    Pulse;$args=@($fm2LivePlan.exe,('--game_data_root='+$fm2LivePlan.data),('--user_data_root='+$fm2LivePlan.user),('--cache_root='+$fm2LivePlan.cache),'--provider_free=true',('--provider_free_root='+$live),('--provider_free_nonce='+$nonce))
    [CannonballLive]::MarkLaunch();$c.owned=[CannonballLive]::Launch($fm2LivePlan.exe,(Join-Path $live bin),(Join-Bo3Command $args),(Join-Path $live stdout.txt),(Join-Path $live stderr.txt),$true);$c.process=Get-Process -Id $c.owned.pid -ErrorAction Stop;$null=$c.process.Handle;$c.gameClock=[Diagnostics.Stopwatch]::StartNew();$c.lastSeen=[DateTime]::UtcNow;Write-Bo3Json (Join-Path $live game-identity.json) $c.owned
-  }finally{foreach($key in $previous.Keys){[Environment]::SetEnvironmentVariable($key,$previous[$key],'Process')}}
+  }
  }
  Fence={$until=[DateTime]::UtcNow.AddSeconds(45);do{Guard;if($c.last-and$c.last.frames-gt1){break};[Threading.Thread]::Sleep(40)}while([DateTime]::UtcNow-lt$until);if(-not$c.last-or$c.last.frames-lt2){throw 'Native output/Present witness absent'};$modules=@($c.process.Modules|ForEach-Object FileName);Write-Bo3Json (Join-Path $live witness.json) @{identity=$c.owned;native=$c.last;modules=$modules;osInput=$false;syntheticGuestOnly=$true;physicalAcceptance=$false}}
  Steps={

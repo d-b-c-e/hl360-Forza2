@@ -1,4 +1,14 @@
 # Pure import; native helpers are loaded only by an explicitly bounded runner.
+function Invoke-Fm2PrivateEnvironment([string]$Live,[scriptblock]$Action){
+ $values=@{APPDATA=(Join-Path $Live appdata);LOCALAPPDATA=(Join-Path $Live localappdata);TEMP=(Join-Path $Live temp);TMP=(Join-Path $Live temp);SDL_FORCE_RAISEWINDOW='0';SDL_WINDOW_ACTIVATE_WHEN_RAISED='0';SDL_WINDOW_ACTIVATE_WHEN_SHOWN='0';SDL_MOUSE_AUTO_CAPTURE='0'}
+ $previous=@{}
+ try{
+  # Environment cvars must not replace private settings. Never log their values.
+  foreach($entry in @(Get-ChildItem Env:|Where-Object Name -like 'REX_*')){$previous[$entry.Name]=$entry.Value;[Environment]::SetEnvironmentVariable($entry.Name,$null,'Process')}
+  foreach($key in $values.Keys){$previous[$key]=[Environment]::GetEnvironmentVariable($key,'Process');[Environment]::SetEnvironmentVariable($key,$values[$key],'Process')}
+  & $Action $values
+ }finally{foreach($key in $previous.Keys){[Environment]::SetEnvironmentVariable($key,$previous[$key],'Process')}}
+}
 function Read-Fm2Plan([string]$Path,[string]$Sha256,[string]$Schema){
  if((Get-ReadbackSha $Path)-cne$Sha256){throw 'Frozen plan hash differs'}
  $value=Get-Content -LiteralPath $Path -Raw|ConvertFrom-Json -DateKind String

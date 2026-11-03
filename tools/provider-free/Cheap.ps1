@@ -16,6 +16,14 @@ $r=[ordered]@{pass=$false;startedUtc=[DateTime]::UtcNow.ToString('o');runnerPid=
 $r.sourcePins=@(Get-Bo3Rows $PSScriptRoot)+@(Get-Bo3Rows (Join-Path $root src) | Where-Object path -match 'provider_free|scripted_input|frame_stats|forza2_app')+@(Get-Bo3Rows (Join-Path $root tests/provider_free))
 foreach($file in @('CMakeLists.txt','generated/rexglue.cmake')){$r.sourcePins+=@{path=(Join-Path $root $file);bytes=(Get-Item (Join-Path $root $file)).Length;sha256=(Get-ReadbackSha (Join-Path $root $file))}}
 try{
+ $environmentPrevious=@{SDL_FORCE_RAISEWINDOW=[Environment]::GetEnvironmentVariable('SDL_FORCE_RAISEWINDOW','Process');REX_FM2_FIXTURE_SENTINEL=[Environment]::GetEnvironmentVariable('REX_FM2_FIXTURE_SENTINEL','Process')}
+ try{
+  $env:SDL_FORCE_RAISEWINDOW='1';$env:REX_FM2_FIXTURE_SENTINEL='fixture'
+  $environmentCase=@{calls=0}
+  Invoke-Fm2PrivateEnvironment $Evidence {param($values);if($env:SDL_FORCE_RAISEWINDOW-cne'0'-or$env:SDL_WINDOW_ACTIVATE_WHEN_SHOWN-cne'0'-or$env:SDL_WINDOW_ACTIVATE_WHEN_RAISED-cne'0'-or$env:SDL_MOUSE_AUTO_CAPTURE-cne'0'-or$env:REX_FM2_FIXTURE_SENTINEL-or$env:APPDATA-cne(Join-Path $Evidence appdata)){throw 'Private child environment differs'};$environmentCase.calls++}
+  $environmentRefused=$false;try{Invoke-Fm2PrivateEnvironment $Evidence {throw 'environment fixture failure'}}catch{$environmentRefused=$_.Exception.Message-ceq'environment fixture failure'}
+  if(-not$environmentRefused-or$environmentCase.calls-ne1-or$env:SDL_FORCE_RAISEWINDOW-cne'1'-or$env:REX_FM2_FIXTURE_SENTINEL-cne'fixture'){throw 'Private environment restore failed'};$r.privateEnvironmentCases=3
+ }finally{foreach($key in $environmentPrevious.Keys){[Environment]::SetEnvironmentVariable($key,$environmentPrevious[$key],'Process')}}
  foreach($row in @(@('CannonballLive.cs','Guard.dll'),@('Snapshot.cs','Snapshot.dll'),@('OwnerIo.cs','OwnerIo.dll'))){$out=Join-Path $Evidence $row[1];Add-Type -Path (Join-Path $PSScriptRoot $row[0]) -OutputAssembly $out;[void][Reflection.Assembly]::LoadFrom($out)}
  $pwsh=[CannonballLive]::ProcessIdentity($PID).image
  foreach($kind in @('cpu','live')){

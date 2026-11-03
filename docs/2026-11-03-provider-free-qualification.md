@@ -101,6 +101,14 @@ x64 GNU-front-end SSE4.1 baseline, accepting the compiler architecture when
 CMake's system-processor field is empty. A later fresh CPU plan uses its own
 evidence/build directory; prior failed objects and receipts remain preserved.
 
+CPU03 GO505470 passed all141 operations in278.915s and released its empty job
+and lease without a forced stop. Candidate46,103,040B SHA
+`F4DF541402C3D9AD967E354B4A1C5AD9C54DF100BE771FE78B6399CF86EF0C5A`;
+runtime/GPU tuple unchanged. Its complete no-load import inventory has36
+signals, requiring pinned offline explanations before live admission. WINMM
+imports are only timeBeginPeriod/timeEndPeriod, not wave endpoint functions.
+This candidate remains unrun.
+
 `Prepare-Cpu.ps1` produces a clean-source/full-SDK/tool/shared-catalog plan.
 `Build.ps1` requires a fresh CPU GO and exclusive lease, at most1800s total,
 90s cleanup reserve and two compiler jobs. It clones and verifies owner disc,
@@ -119,6 +127,12 @@ then exact owned SDL/main-window normal WM_CLOSE after5s if needed; **no game
 hard kill**. A capture-helper failure cannot implicitly kill the game. Unknown
 owner drift is preserved for investigation, never overwritten as a routine
 restore. Uncertain close/state cleanup retains custody.
+The live child's environment forces SDL force-raise, activation when shown/
+raised and mouse auto-capture hints to0 and clears inherited REX_ cvars. These
+are child-local values; parent values restore even on a launch error. No helper
+activation is issued. Complete offline import resolutions/support are pinned
+in the frozen live plan; selected constructor/driver counters still need the
+actual live witness. Retained SDL input/focus imports are not absence proof.
 
 The assertion is native consumed input/progress plus captured UI/startup
 milestones. Driving, pedals/gears, physical wheel/FFB, settings UI, telemetry,
