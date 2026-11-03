@@ -40,8 +40,14 @@ The real wrapper still forwards to the original once, with default-off ordinary
 behavior preserved. The fixture supplies an inert original that invokes input
 while Present is in flight, then checks both in-flight and returned states.
 No new thread, host backend, timeout change or quit/fallback change is added.
-This successor needs its focused compile/fixture checks and a new full CPU build
-before any runtime request; it is not the F4DF5414 candidate that ran above.
+CPU506939 now passes both complete focused suites at source60ab06cd:260 native
+assertions/158 registry entries and40 rehearsal checks, identical34 source/15
+SDK pins. The real wrapper/inert original asserts ordinary forwarding, input
+publication with entry1/return0/inflight1, then return1/inflight0 with continued
+input. Existing cleanup tests also call Frame directly, so their final synthetic
+status is not a rendered-frame or unmatched-Present result. Native game target
+and GPU are never run by these fixtures. A new full CPU build is still required
+before any future runtime request; this is not the F4DF5414 candidate above.
 Diagnostic CPU506723 compiled and linked the fixture, then failed its first
 in-flight assertion; the second suite did not start. Nested/outer jobs and
 held handles closed, independent process audit passed and lease released in
@@ -50,6 +56,18 @@ against the80ms cap on coarse GetTickCount64 ticks. Its successor waits on the
 same production clock with a bounded loop and reports actual failure counters;
 production code, cap, assertions and timeouts are unchanged. The failed logs
 remain under diag01/diag-final01 for provenance; no unchanged retry follows.
+The original failure did not log clock age or in-memory components, so the
+coarse-clock explanation remains provisional. Soba's bounded read-only review
+506982 found no concrete ABI/provider-state/reentrancy flaw; a corrected pass
+does not retrospectively prove a unique first-failure cause.
+
+CPU506939 released in66.645s: both nested tool jobs empty/handles0, outer roots
+signaled/job empty/handles0, independent scoped process audit PASS before exact
+lease release, failure/ownedStop null. Diagnostic receipt73E95703 and audit
+17C5BE5E are under `_local/provider-free/diag02`; no resources/custody remain.
+The requested offline diagnostic increment is complete on its branch. Canonical
+local main contains the earlier qualified prefix79ff506; this unbuilt diagnostic
+successor stays on the branch pending a separate full-build/runtime decision.
 
 Source branch: `napo/forza2-provider-free-20261103`, isolated worktree
 `E:\Source\_work\napo-forza2-provider-free-20261103`, starting at
