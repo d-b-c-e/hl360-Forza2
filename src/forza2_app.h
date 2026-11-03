@@ -12,6 +12,7 @@
 #include <rex/system/kernel_state.h>
 
 #include "profile.h"
+#include "provider_free.h"
 
 REXCVAR_DECLARE(std::string, game_data_root);
 REXCVAR_DECLARE(std::string, user_data_root);
@@ -40,6 +41,14 @@ class Forza2App : public rex::ReXApp {
 
   void OnPostInitLogging() override {
     forza2::InstallCrashReporter();
+  }
+
+  void OnPreSetup(rex::RuntimeConfig& config) override {
+    forza2::qualification::Configure(config);
+  }
+
+  void OnShutdown() override {
+    forza2::qualification::Stop();
   }
 
   // Two config files next to the exe:
@@ -79,6 +88,9 @@ class Forza2App : public rex::ReXApp {
   // that they opened. The SDK leaves cache: unmounted on purpose (most titles
   // cope), so give it a real, writable folder per profile.
   void OnPostSetup() override {
+    forza2::qualification::Start([this] {
+      app_context().CallInUIThreadDeferred([this] {if (window()) window()->RequestClose();});
+    });
     const auto cache_dir = user_data_root_ / "cache-partition";
     std::error_code ec;
     std::filesystem::create_directories(cache_dir, ec);

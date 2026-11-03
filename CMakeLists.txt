@@ -4,6 +4,7 @@
 
 cmake_minimum_required(VERSION 3.25)
 project(forza2 LANGUAGES CXX)
+enable_language(C)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -42,17 +43,37 @@ set(FORZA2_SOURCES
 
 if(WIN32)
     add_executable(forza2 WIN32 ${FORZA2_SOURCES})
+    target_sources(forza2 PRIVATE src/provider_free.cpp src/provider_free_io.c src/provider_free_network.cpp)
 else()
-    add_executable(forza2 ${FORZA2_SOURCES})
+    add_executable(forza2 ${FORZA2_SOURCES} src/provider_free_disabled.cpp)
 endif()
 
 rexglue_setup_target(forza2 GPU_PLUGINS xenos)
+# __imp_ is the COFF import-address prefix. Use unambiguous local names for
+# overridden exports in both guest mappings/calls and host definitions; never
+# rely on duplicate-symbol link ordering or /force:multiple.
+if(WIN32)
+set(FORZA2_LOCAL_EXPORTS XamInputGetState XamInputGetCapabilities XamInputSetState
+    XamInputGetKeystroke XamUserGetName XamUserGetGamerTag XamUserGetSigninInfo)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/src/provider_free_network.def" _fm2_net_rows REGEX "^FM2_NET")
+foreach(_row IN LISTS _fm2_net_rows)
+    string(REGEX REPLACE "FM2_NET\\(([A-Za-z0-9_]+),.*" "\\1" _name "${_row}")
+    list(APPEND FORZA2_LOCAL_EXPORTS "${_name}")
+endforeach()
+foreach(_name IN LISTS FORZA2_LOCAL_EXPORTS)
+    target_compile_definitions(forza2 PRIVATE "__imp__${_name}=Fm2Native_${_name}")
+    target_compile_definitions(forza2_recomp PRIVATE "__imp__${_name}=Fm2Native_${_name}")
+endforeach()
+endif()
 if(WIN32)
     target_link_libraries(forza2 PRIVATE dbghelp)
 endif()
 
 # Launcher: profiles, settings, ISO import (launcher/).
-add_subdirectory(launcher)
+option(FORZA2_BUILD_LAUNCHER "Build the independent importer/settings launcher" ON)
+if(FORZA2_BUILD_LAUNCHER)
+    add_subdirectory(launcher)
+endif()
 
 # Port settings ship next to the exe (the runtime reads <exe dir>/forza2.toml).
 add_custom_command(TARGET forza2 POST_BUILD

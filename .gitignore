@@ -21,3 +21,6 @@ cover.bmp
 
 # Scripted-input pad state (tools/pad.ps1)
 /pad.txt
+
+# Private qualification plans, cloned state and evidence.
+/_local/

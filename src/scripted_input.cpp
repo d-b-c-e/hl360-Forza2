@@ -16,6 +16,7 @@
 #include <rex/cvar.h>
 #include <rex/ppc/context.h>
 #include <rex/types.h>
+#include "provider_free.h"
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -77,6 +78,11 @@ GuestFunc Original() {
 extern "C" void __imp__XamInputGetState(PPCContext& __restrict ctx, uint8_t* base) {
   const uint32_t user_index = ctx.r3.u32;
   const uint32_t state_ptr = ctx.r5.u32;
+  uint32_t isolated_result = 0;
+  if (forza2::qualification::Input(user_index,state_ptr,base,isolated_result)) {
+    ctx.r3.u64 = isolated_result;
+    return;
+  }
   if (GuestFunc original = Original()) original(ctx, base);
   const std::string path = REXCVAR_GET(scripted_input);
   if (path.empty() || user_index != 0 || !state_ptr) return;

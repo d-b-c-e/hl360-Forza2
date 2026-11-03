@@ -11,6 +11,7 @@
 #include <rex/cvar.h>
 #include <rex/logging.h>
 #include <rex/ppc/context.h>
+#include "provider_free.h"
 
 REXCVAR_DEFINE_BOOL(frame_stats, false, "Profile", "Log frame pacing statistics every 5 seconds");
 
@@ -29,6 +30,7 @@ struct Stats {
 }  // namespace
 
 extern "C" void sub_8236CB28(PPCContext& __restrict ctx, uint8_t* base) {
+  forza2::qualification::Frame();
   if (!REXCVAR_GET(frame_stats)) {
     __imp__sub_8236CB28(ctx, base);
     return;
