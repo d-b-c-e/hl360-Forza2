@@ -119,11 +119,11 @@ void Publish(bool final = false) {
   std::snprintf(text, sizeof text,
     "{\"schema\":\"fm2.provider-free@1\",\"nonce\":\"%s\",\"pid\":%lu,\"birthFileTime\":%llu,"
     "\"noHost\":true,\"controllers\":0,\"inputSystems\":%llu,\"networkBlocked\":true,\"audio\":\"silent-ack\","
-    "\"seq\":%llu,\"consumedSeq\":%llu,\"consumed\":%llu,\"frames\":%llu,\"networkCalls\":%llu,"
+    "\"seq\":%llu,\"consumedSeq\":%llu,\"consumed\":%llu,\"frames\":%llu,\"networkCalls\":%llu,\"registryNetEntries\":%llu,"
     "\"forceCalls\":%llu,\"audioSystems\":%llu,\"audioDrivers\":%llu,\"audioFrames\":%llu,\"audioFailures\":%llu,\"buttons\":%d,\"lt\":%d,\"rt\":%d,\"lx\":%d,"
     "\"elapsedMs\":%llu,\"closing\":%s,\"final\":%s,\"reason\":\"%s\"}\n",
     nonce.c_str(),GetCurrentProcessId(),birth,input_systems.load(),command.seq,consumed_seq,consumed,frames,
-    network_calls.load(),force_calls.load(),audio_systems.load(),audio_drivers.load(),audio_frames.load(),audio_failures.load(),command.buttons,command.lt,command.rt,command.lx,
+    network_calls.load(),NetworkRegistryEntries(),force_calls.load(),audio_systems.load(),audio_drivers.load(),audio_frames.load(),audio_failures.load(),command.buttons,command.lt,command.rt,command.lx,
     now-started,close_sent?"true":"false",final?"true":"false",reason.c_str());
   unsigned long error = 0;
   if (!fm2_pf_publish((root+"/status.json").c_str(),text,&error)) Fail("status-write");
@@ -150,6 +150,7 @@ bool Enabled() {
 }
 void Configure(rex::RuntimeConfig& config) {
   if (!Enabled()) return;
+  ArmNetworkRegistry(); // Before Runtime/kernel/guest construction or thunk caching.
   // Real SDK type, with ZERO drivers; ReXApp's AttachWindow/static_cast remains valid.
   config.input_factory = [](bool) -> std::unique_ptr<rex::system::IInputSystem> {
     ++input_systems;

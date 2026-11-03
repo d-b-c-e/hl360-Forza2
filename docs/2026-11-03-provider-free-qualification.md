@@ -63,6 +63,12 @@ these pinned DLLs with a new private EXE; no SDK upgrade/install follows.
   resolves original DLL exports. Distinct local wrapper symbols are used in
   guest mappings/calls and host definitions to avoid COFF `__imp_` collisions;
   no duplicate-symbol linker override is used.
+  Before Runtime/kernel construction, qualification also replaces every NetDll
+  entry in the pinned DLL's actual PPC-function registry. The kernel's dynamic
+  ordinal resolver uses that registry to create cached thunks; direct generated
+  wrappers alone did not cover it. Known entries use their normal offline
+  wrapper, additional entries deny without a host call. Missing registry/known
+  entries refuse startup. `registryNetEntries` records the actual armed count.
 - Commands/status use actual shared-delete readers and whole-file atomic
   publication. Strict nonce/sequence/range validation, stale-command neutral,
   consumed-state trace and normal close are exercised in scratch. Real
@@ -73,7 +79,7 @@ these pinned DLLs with a new private EXE; no SDK upgrade/install follows.
 ## Admission and evidence
 
 `tools/provider-free/Cheap.ps1` is the complete no-lease/no-game/no-hook/no-device
-scratch suite. It exercises93 actual native consumer/export/factory/driver
+scratch suite. It exercises actual native consumer/export/factory/driver
 checks, the real data clone/2344-member alternative-hash verifier, typed
 Build/Run positive and refusal paths, actual host-header/Present syntax, the
 production concurrent IO,29 sparse/metadata/lifecycle checks with an independent
@@ -81,6 +87,19 @@ numeric-tick verifier, six owned-job classifier cases, callback scope regression
 and nested versus helper-only stop accounting. Development evidence is ignored
 under `_local/provider-free/cheap-dev*`. Final admission requires two complete
 passes with identical source/SDK pins after the source is frozen.
+The native fixture calls the DLL registry's actual fenced pointers. The real
+CMake dry-run requires SSE4.1 on both host and generated guest consumers; a tiny
+linked executable tests eight tie-to-even cases through the exact SIMDE vrfin
+expression. No game target is compiled during those scratch checks. Rapid-exit
+helpers drain before the next fixture's strict root/console-only census.
+
+CPU02 GO505097 compiled140 native objects/PCH, then failed its final link on
+`roundevenf` emitted by SIMDE's fallback in `forza2_recomp.5.cpp:17405`.
+No candidate was produced. The342.842s lease was released with an empty job,
+no forced stop and no game run. The correction restores the existing Windows
+x64 GNU-front-end SSE4.1 baseline, accepting the compiler architecture when
+CMake's system-processor field is empty. A later fresh CPU plan uses its own
+evidence/build directory; prior failed objects and receipts remain preserved.
 
 `Prepare-Cpu.ps1` produces a clean-source/full-SDK/tool/shared-catalog plan.
 `Build.ps1` requires a fresh CPU GO and exclusive lease, at most1800s total,

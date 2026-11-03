@@ -27,6 +27,16 @@ function Invoke-Fm2ToolchainSmoke([string]$Root,[string]$Evidence,[string]$Sdk){
  $model=Read-Bo3Text (Join-Path $build build.ninja) 4194304
  if(-not$model-or$model-match'COMMAND = .*\bcodegen\b'){throw 'Generated candidate tree still contains a codegen command'}
  if(Test-Path -LiteralPath (Join-Path $build forza2.exe)){throw 'Inert smoke unexpectedly built the game target'}
+ $commands=(Read-Bo3Text (Join-Path $build compile_commands.json) 4194304)|ConvertFrom-Json
+ foreach($consumer in @('src/main.cpp','generated/default/forza2_recomp.5.cpp')){
+  $command=@($commands|Where-Object{$_.file.Replace('\','/').EndsWith($consumer)})
+  if($command.Count-ne1-or$command[0].command-notmatch'(^| )-msse4\.1( |$)'){throw ('Actual candidate consumer lacks SSE4.1: '+$consumer)}
+ }
+ $rounding=Join-Path $Evidence rounding-test.exe;$context.phase='actual-vrfin-link-probe'
+ Invoke-Bo3Owned $tools.clangxx @('-std=c++23','-O2','-msse4.1',('-I'+$Sdk+'/include'),'tests/provider_free/test_rounding.cpp','-o',$rounding) $Root rounding-compile $Evidence 30 {Add-Fm2ToolchainCensus $context $Evidence} $true 5|Out-Null
+ Invoke-Bo3Owned $rounding @() $Root rounding-test $Evidence 10 $null|Out-Null
+ $roundResult=(Read-Bo3Text (Join-Path $Evidence rounding-test.stdout.txt))|ConvertFrom-Json
+ if(-not$roundResult.pass-or$roundResult.roundToEvenCases-ne8){throw 'Actual vrfin round-to-even link/runtime probe failed'}
  $until=[DateTime]::UtcNow.AddSeconds(10);while([CannonballLive]::JobPids().Length-and[DateTime]::UtcNow-lt$until){Add-Fm2ToolchainCensus $context $Evidence;[Threading.Thread]::Sleep(5)}
  if([CannonballLive]::JobPids().Length){throw 'Inert real toolchain job not quiescent'}
  Write-Bo3Json (Join-Path $Evidence toolchain-identities.json) @($context.seen.Values)

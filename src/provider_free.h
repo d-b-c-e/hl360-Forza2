@@ -9,6 +9,8 @@ namespace forza2::qualification {
 // Off by default. Selected before any input backend is constructed.
 bool Enabled();
 void Configure(rex::RuntimeConfig& config);
+uint64_t ArmNetworkRegistry();
+uint64_t NetworkRegistryEntries();
 void PrivatePaths(rex::PathConfig& paths,const std::filesystem::path& executable_folder);
 void Start(std::function<void()> close);
 void Stop();

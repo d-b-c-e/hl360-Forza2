@@ -50,6 +50,13 @@ else()
 endif()
 
 rexglue_setup_target(forza2 GPU_PLUGINS xenos)
+if(WIN32 AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU" AND
+   (CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|amd64|x86_64)$" OR MSVC_CXX_ARCHITECTURE_ID STREQUAL "x64"))
+    # Match the installed build's SSE4.1 baseline. Otherwise SIMDE's vrfin
+    # fallback emits roundevenf, which is not supplied by the Windows UCRT.
+    target_compile_options(forza2 PRIVATE -msse4.1)
+    target_compile_options(forza2_recomp PRIVATE -msse4.1)
+endif()
 # __imp_ is the COFF import-address prefix. Use unambiguous local names for
 # overridden exports in both guest mappings/calls and host definitions; never
 # rely on duplicate-symbol link ordering or /force:multiple.

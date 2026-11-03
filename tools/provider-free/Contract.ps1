@@ -24,7 +24,7 @@ function Read-Bo3Status([string]$Path,[string]$Nonce,$Identity){
  $text=Read-Bo3Text $Path;if($null-eq$text){return $null}
  try{$s=$text|ConvertFrom-Json -DateKind String}catch{return $null}
  if($s.schema-cne'fm2.provider-free@1'-or$s.nonce-cne$Nonce-or$s.pid-ne$Identity.pid-or[long]$s.birthFileTime-ne($Identity.birth-504911232000000000L)){throw 'Status identity differs'}
- if(-not$s.noHost-or$s.controllers-ne0-or$s.inputSystems-ne1-or-not$s.networkBlocked-or$s.audio-cne'silent-ack'-or$s.audioSystems-ne1-or$s.audioFailures-or$s.reason){throw ('Native output fence failed: '+$s.reason)}
+ if(-not$s.noHost-or$s.controllers-ne0-or$s.inputSystems-ne1-or-not$s.networkBlocked-or$s.registryNetEntries-lt40-or$s.audio-cne'silent-ack'-or$s.audioSystems-ne1-or$s.audioFailures-or$s.reason){throw ('Native output fence failed: '+$s.reason)}
  return $s
 }
 function Get-Bo3Rows([string]$Root){@(Get-ChildItem -LiteralPath $Root -File -Recurse -Force|Sort-Object FullName|ForEach-Object{Assert-ReadbackPlain $_.FullName;@{path=$_.FullName;bytes=$_.Length;sha256=(Get-ReadbackSha $_.FullName)}})}

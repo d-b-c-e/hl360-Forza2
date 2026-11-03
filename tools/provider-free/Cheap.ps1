@@ -12,7 +12,7 @@ $ErrorActionPreference='Stop'
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot ../..));$Evidence=[IO.Path]::GetFullPath($Evidence)
 if(-not(Test-ReadbackWithin $Evidence (Join-Path $root _local/provider-free))-or(Test-Path $Evidence)){throw 'Fresh project scratch required'}
 Assert-ReadbackPlain $Evidence;[void][IO.Directory]::CreateDirectory($Evidence)
-$r=[ordered]@{pass=$false;game=$false;hooks=$false;device=$false;owner=$false;lease=$false;failure=$null}
+$r=[ordered]@{pass=$false;startedUtc=[DateTime]::UtcNow.ToString('o');runnerPid=$PID;game=$false;hooks=$false;device=$false;owner=$false;lease=$false;failure=$null}
 $r.sourcePins=@(Get-Bo3Rows $PSScriptRoot)+@(Get-Bo3Rows (Join-Path $root src) | Where-Object path -match 'provider_free|scripted_input|frame_stats|forza2_app')+@(Get-Bo3Rows (Join-Path $root tests/provider_free))
 foreach($file in @('CMakeLists.txt','generated/rexglue.cmake')){$r.sourcePins+=@{path=(Join-Path $root $file);bytes=(Get-Item (Join-Path $root $file)).Length;sha256=(Get-ReadbackSha (Join-Path $root $file))}}
 try{
@@ -63,6 +63,10 @@ try{
  if($helperStop.firstFailure-cne'inert helper-only failure'-or$helperStop.scope-cne'helper-only'){throw 'Cleanup masked the first refusal'};$r.firstRefusalVerbatim=$true
  foreach($n in 0..19){$label='rapid-exit-'+$n;$fast=[CannonballLive]::Launch($helperExe,$Evidence,(Join-Bo3Command @($helperExe,'fast')),(Join-Path $Evidence ($label+'.stdout.txt')),(Join-Path $Evidence ($label+'.stderr.txt')),$false);[void]@(Get-Bo3JobIdentities)}
  $r.rapidExitCensuses=20
+ # Rapid roots can remain scheduled for a moment after Launch returns. Drain
+ # only these fixture helpers before applying the root/console-only policy.
+ $until=[DateTime]::UtcNow.AddSeconds(3)
+ do{$extras=@(Get-Bo3JobIdentities|Where-Object{$_.pid-ne$consoleRoot.pid-and$_.image-ine$consoleHost});if(-not$extras.Count){break};if([DateTime]::UtcNow-gt$until){throw 'Rapid fixture helpers did not exit'};[Threading.Thread]::Sleep(10)}while($true)
  $rolePlan=@{python=$consoleExe;candidate=(Join-Path $Evidence unused-game.exe);capture=(Join-Path $Evidence unused-capture.exe);consoleHost=$consoleHost};$seen=@{};$until=[DateTime]::UtcNow.AddSeconds(8)
  try{do{Get-Bo3JobCensus $consoleRoot $rolePlan $seen (Join-Path $Evidence console-identities.json);if($consoleProcess.WaitForExit(20)-and-not[CannonballLive]::JobPids().Length){break};if($consoleProcess.HasExited){[Threading.Thread]::Sleep(20)};if([DateTime]::UtcNow-gt$until){throw 'Inert console child deadline'}}while($true);if($consoleProcess.ExitCode){throw 'Inert console exit failed'}}finally{$consoleProcess.Dispose()}
  if([CannonballLive]::JobPids().Length){throw 'Inert console job not empty'};[CannonballLive]::ReleaseJob()
@@ -87,18 +91,20 @@ try{
  Copy-Item -LiteralPath (Join-Path $sdk bin/rexruntime.dll) -Destination $Evidence
  $compiler='C:\Program Files\LLVM\bin\clang-cl.exe';$nativeExe=Join-Path $Evidence native-test.exe
  $defines=@(@('XamInputGetState','XamInputGetCapabilities','XamInputSetState','XamInputGetKeystroke')+$fences|ForEach-Object{'/D__imp__'+$_+'=Fm2Native_'+$_})
- $args=@('/nologo','/std:c++latest','/EHsc','/MD','/DWIN32','/DNOMINMAX','/DWIN32_LEAN_AND_MEAN','/DSPDLOG_COMPILED_LIB','/DSPDLOG_FMT_EXTERNAL','/DREX_HAS_D3D12=1','/clang:-msse4.1')+$defines+@(('/I'+$sdk+'/include'),'/Isrc','tests/provider_free/test_native.cpp','src/scripted_input.cpp','src/provider_free_network.cpp','src/provider_free_io.c',('/Fe:'+ $nativeExe),('/Fo'+$Evidence+'\'),'/link',('/libpath:'+$sdk+'/lib'),'rexruntime.lib','fmt.lib','spdlog.lib')
+ $args=@('/nologo','/std:c++latest','/EHsc','/MD','/DWIN32','/DNOMINMAX','/DWIN32_LEAN_AND_MEAN','/DSPDLOG_COMPILED_LIB','/DSPDLOG_FMT_EXTERNAL','/DREX_HAS_D3D12=1','/clang:-msse4.1')+$defines+@(('/I'+$sdk+'/include'),'/Isrc','tests/provider_free/test_native.cpp','src/scripted_input.cpp','src/provider_free_io.c',('/Fe:'+ $nativeExe),('/Fo'+$Evidence+'\'),'/link',('/libpath:'+$sdk+'/lib'),'rexruntime.lib','fmt.lib','spdlog.lib')
  Invoke-Bo3Owned $compiler $args $root native-compile $Evidence 40 $null|Out-Null
  $syntaxArgs=@('/nologo','/std:c++latest','/EHsc','/MD','/DWIN32','/DNOMINMAX','/DWIN32_LEAN_AND_MEAN','/DSPDLOG_COMPILED_LIB','/DSPDLOG_FMT_EXTERNAL','/DREX_HAS_D3D12=1','/clang:-msse4.1')+$defines+@(('/I'+$sdk+'/include'),('/I'+$root),'/Isrc','/Igenerated/default','/Zs','src/main.cpp','src/frame_stats.cpp','src/provider_free_disabled.cpp')
  Invoke-Bo3Owned $compiler $syntaxArgs $root actual-host-syntax $Evidence 40 $null|Out-Null
  Invoke-Bo3Owned $nativeExe @((Join-Path $Evidence native-fixture)) $root native-test $Evidence 20 $null|Out-Null
  $r.native=((Read-Bo3Text (Join-Path $Evidence native-test.stdout.txt))|ConvertFrom-Json)
- if(-not$r.native.pass-or$r.native.networkExports-ne40-or$r.native.hostDrivers-ne0){throw 'Actual native consumer/fence/factory fixture failed'}
+ if(-not$r.native.pass-or$r.native.networkExports-ne40-or$r.native.networkRegistryEntries-lt40-or$r.native.hostDrivers-ne0){throw 'Actual native consumer/fence/factory fixture failed'}
  $r.nativeCompilerSha256=Get-ReadbackSha $compiler
  $r.rehearsal=Get-Content (Join-Path $Evidence rehearsal/result.json) -Raw|ConvertFrom-Json
  $r.pass=$true
 }catch{$r.failure=$_.Exception.ToString();throw}finally{
- if('CannonballLive'-as[type]){if([CannonballLive]::JobPids().Length){Write-Bo3Json (Join-Path $Evidence cleanup-identities.json) @(Get-Bo3JobIdentities);[CannonballLive]::KillOwned()};$until=[DateTime]::UtcNow.AddSeconds(5);while([CannonballLive]::JobPids().Length-and[DateTime]::UtcNow-lt$until){[Threading.Thread]::Sleep(20)};if(-not[CannonballLive]::JobPids().Length){[CannonballLive]::ReleaseJob()}}
+ if('CannonballLive'-as[type]){try{if([CannonballLive]::JobPids().Length){Write-Bo3Json (Join-Path $Evidence cleanup-identities.json) @(Get-Bo3JobIdentities);[CannonballLive]::KillOwned()};$until=[DateTime]::UtcNow.AddSeconds(5);while(([CannonballLive]::JobPids().Length-or-not[CannonballLive]::LaunchedProcessesExited())-and[DateTime]::UtcNow-lt$until){[Threading.Thread]::Sleep(20)};[CannonballLive]::ReleaseJob()}catch{$r.cleanupFailure=$_.Exception.Message;$r.pass=$false}}
+ if('CannonballLive'-as[type]){$r.jobEmpty=[CannonballLive]::JobPids().Length-eq0;$r.retainedProcessHandles=[CannonballLive]::RetainedProcessHandles()}
+ $r.finishedUtc=[DateTime]::UtcNow.ToString('o')
  if('OutRunSnapshot'-as[type]){Write-Bo3Json (Join-Path $Evidence result.json) $r}
 }
 @{pass=$r.pass;failure=$r.failure;native=$r.native;rehearsalChecks=$r.rehearsal.checks;jobPolicyCases=$r.jobPolicyCases;helperOnlyStopPreservesRoot=$r.helperOnlyStopPreservesRoot;evidence=$Evidence}|ConvertTo-Json -Depth 4

@@ -21,7 +21,7 @@ try{Write-Bo3Text $atomic "second`n";Check ((Read-Bo3Text $atomic)-ceq"second`n"
 [IO.File]::WriteAllText($atomic,'partial');Check ($null-eq(Read-Bo3Text $atomic)) 'Partial tail retryable'
 Check ($null-eq(Read-Bo3Text (Join-Path $e missing))) 'Missing active file retryable'
 $identity=@{pid=123;birth=639293000000000000L};$status=Join-Path $e status.json
-$good=@{schema='fm2.provider-free@1';nonce='0123456789abcdef0123456789abcdef';pid=123;birthFileTime=134381768000000000L;noHost=$true;controllers=0;inputSystems=1;networkBlocked=$true;audio='silent-ack';audioSystems=1;audioFailures=0;reason='';seq=1}
+$good=@{schema='fm2.provider-free@1';nonce='0123456789abcdef0123456789abcdef';pid=123;birthFileTime=134381768000000000L;noHost=$true;controllers=0;inputSystems=1;networkBlocked=$true;registryNetEntries=40;audio='silent-ack';audioSystems=1;audioFailures=0;reason='';seq=1}
 # FILETIME uses the explicit .NET epoch offset, not locale/date parsing.
 $good.birthFileTime=$identity.birth-504911232000000000L
 Write-Bo3Json $status $good;Check ($null-ne(Read-Bo3Status $status $good.nonce $identity)) 'Fresh identity accepted'

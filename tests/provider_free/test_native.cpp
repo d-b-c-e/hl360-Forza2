@@ -1,6 +1,7 @@
 // Actual production consumer/export/factory tests. No app, renderer, hook,
 // host input backend, game, socket or owner files are opened.
 #include "../../src/provider_free.cpp"
+#include "../../src/provider_free_network.cpp"
 #include <rex/ppc/context.h>
 #include <vector>
 
@@ -91,6 +92,13 @@ int main(int argc,char** argv) {
   #include "../../src/provider_free_network.def"
   #undef FM2_NET
   CHECK(network_calls.load()==net_count&&net_count==40&&force_calls.load()==1);
+  unsigned dynamic_count=0;
+  for(const auto& entry:*RuntimeRegistry())if(entry.first&&std::strncmp(entry.first,"__imp__NetDll_",14)==0){
+    CHECK(entry.second==FencedNetworkFunction(entry.first));
+    ctx.r3.u32=0;ctx.r4.u32=0x1200;entry.second(ctx,memory.data());++dynamic_count;
+  }
+  CHECK(dynamic_count==NetworkRegistryEntries()&&dynamic_count>=40);
+  CHECK(network_calls.load()==net_count+dynamic_count);
   CHECK(std::count(memory.begin()+0x1200,memory.begin()+0x1224,uint8_t(0))==36);
   CHECK(publish(make(2,0,0,0,0,0)));Sleep(25);
   ctx.r3.u32=0;ctx.r5.u32=0x1000;__imp__XamInputGetState(ctx,memory.data());CHECK(ctx.r3.u32==0);
@@ -102,5 +110,5 @@ int main(int argc,char** argv) {
   Sleep(1600);ctx.r3.u32=0;__imp__XamInputGetState(ctx,memory.data());CHECK(ctx.r3.u32==0);
   CHECK(uint16_t(pad->gamepad.buttons)==0&&pad->gamepad.right_trigger==0&&int16_t(pad->gamepad.thumb_lx)==0);
   Frame();CHECK(closes==1&&reason=="command-stale");Frame();CHECK(closes==1);Stop();
-  std::printf("{\"pass\":true,\"checks\":%u,\"networkExports\":%u,\"game\":false,\"hooks\":false,\"hostDrivers\":0}\n",checks,net_count);
+  std::printf("{\"pass\":true,\"checks\":%u,\"networkExports\":%u,\"networkRegistryEntries\":%u,\"game\":false,\"hooks\":false,\"hostDrivers\":0}\n",checks,net_count,dynamic_count);
 }
