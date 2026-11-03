@@ -9,19 +9,19 @@ $fm2CpuPlan=Read-Fm2Plan $Plan $ExpectedSha256 'fm2.cpu-plan@1'
 if($CheckPlanOnly){@{scopePass=$true;planType=$fm2CpuPlan.GetType().FullName;game=$false;hooks=$false;owner=$false;lease=$false}|ConvertTo-Json;return}
 Assert-Bo3Source $fm2CpuPlan.source;Assert-Bo3Rows $fm2CpuPlan.sourcePins;Assert-Bo3Rows $fm2CpuPlan.toolPins;Assert-Bo3Rows $fm2CpuPlan.sdkPins
 Assert-Bo3Rows $fm2CpuPlan.hostAudit.pins
+Assert-Bo3Rows $fm2CpuPlan.derivedTools
 $e=$fm2CpuPlan.evidence;$out=Join-Path $e cpu-result.json
 if(Test-Path -LiteralPath $out){throw 'One CPU invocation per frozen plan'}
 foreach($name in @('Guard.dll','Snapshot.dll','OwnerIo.dll')){$origin=Join-Path ([IO.Path]::GetDirectoryName($fm2CpuPlan.cheap[1].path)) $name;Copy-Item -LiteralPath $origin -Destination $e;[void][Reflection.Assembly]::LoadFrom((Join-Path $e $name))}
 $leaseName='napo-forza2-cpu-'+$Go;$leaseTool='E:\Source\dbce-project-mgmt\tools\Rig-Lease.ps1';$receipt=Join-Path $env:LOCALAPPDATA ('dbce/claude-lease-'+$leaseName+'.json')
 $cpuContext=@{lease=$null;clock=[Diagnostics.Stopwatch]::StartNew();workSeconds=1710;epoch=[DateTime]::UtcNow.Ticks;seen=@{}}
 $result=[ordered]@{status='INCOMPLETE';go=$Go;planSha256=$ExpectedSha256;source=$fm2CpuPlan.source.commit;game=$false;hooks=$false;ownerWrite=$false;install=$false;publicPush=$false;released=$false;jobEmpty=$false;failure=$null}
-$allowed=@($fm2CpuPlan.tools.Values)+@($fm2CpuPlan.tools.PSObject.Properties.Value)+@($env:ComSpec,(Join-Path ([Environment]::GetFolderPath('System')) conhost.exe),'C:\Program Files\LLVM\bin\lld-link.exe')
+$allowed=@($fm2CpuPlan.derivedTools.path)
 function CpuGuard {
  Assert-Bo3Budget $cpuContext
  if(-not$cpuContext.lease-or-not(Test-Path -LiteralPath $cpuContext.lease.path)-or(Get-Content -LiteralPath $cpuContext.lease.path -Raw).Trim()-cne$cpuContext.lease.token){throw 'Exact CPU lease lost'}
  $bad=@()
- foreach($childPid in @([CannonballLive]::JobPids())){
-  try{$id=[CannonballLive]::ProcessIdentity($childPid)}catch{if(Get-Process -Id $childPid -ErrorAction SilentlyContinue){throw};continue}
+ foreach($id in @(Get-Bo3JobIdentities)){
   $key=[string]$id.pid+':'+[string]$id.birth
   if(-not$cpuContext.seen.ContainsKey($key)){$cpuContext.seen[$key]=$id;Write-Bo3Json (Join-Path $e cpu-identities.json) @($cpuContext.seen.Values)}
   if($id.birth-lt$cpuContext.epoch-or$id.image-notin$allowed){$bad+=$id}
@@ -40,7 +40,7 @@ try{
  $result.dataContract=Test-Fm2Disc $result.dataRows (Join-Path $fm2CpuPlan.source.root launcher/data/game_files.sha256)
  $result.userRows=@(Copy-Fm2Tree $fm2CpuPlan.ownerProfile (Join-Path $e user) {CpuGuard})
  $result.cacheRows=@(Copy-Fm2Tree $fm2CpuPlan.ownerCache (Join-Path $e cache) {CpuGuard})
- $cmakeArgs=@('-S',$fm2CpuPlan.source.root,'-B',$fm2CpuPlan.build,'-G','Ninja',('-DCMAKE_MAKE_PROGRAM='+$fm2CpuPlan.tools.ninja),('-DCMAKE_C_COMPILER='+$fm2CpuPlan.tools.clang),('-DCMAKE_CXX_COMPILER='+$fm2CpuPlan.tools.clangxx),('-DCMAKE_PREFIX_PATH='+$fm2CpuPlan.sdk),'-DCMAKE_BUILD_TYPE=Release','-DFORZA2_BUILD_LAUNCHER=OFF','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON')
+ $cmakeArgs=Get-Fm2ConfigureArguments $fm2CpuPlan.source.root $fm2CpuPlan.build $fm2CpuPlan.sdk $fm2CpuPlan.tools
  Invoke-Bo3Owned $fm2CpuPlan.tools.cmake $cmakeArgs $fm2CpuPlan.source.root configure $e 120 {CpuGuard}|Out-Null;CpuGuard
  Invoke-Bo3Owned $fm2CpuPlan.tools.cmake @('--build',$fm2CpuPlan.build,'--target','forza2','--parallel','2') $fm2CpuPlan.source.root build $e 1560 {CpuGuard}|Out-Null;CpuGuard
  $exe=Join-Path $fm2CpuPlan.build forza2.exe
@@ -57,7 +57,7 @@ try{
 }catch{$result.status='BLOCKED';$result.failure=$_.Exception.ToString()}
 finally{
  if(-not$cpuContext.lease-and(Test-Path -LiteralPath $receipt)){$maybe=Get-Content -LiteralPath $receipt -Raw|ConvertFrom-Json;if((Test-Path -LiteralPath $maybe.path)-and(Get-Content -LiteralPath $maybe.path -Raw).Trim()-ceq$maybe.token){$cpuContext.lease=$maybe}}
- if([CannonballLive]::JobPids().Length){Write-Bo3Json (Join-Path $e cpu-before-owned-termination.json) @([CannonballLive]::JobPids()|ForEach-Object{[CannonballLive]::ProcessIdentity($_)});[CannonballLive]::KillOwned();$result.ownedStop=$true}
+ if([CannonballLive]::JobPids().Length){Write-Bo3Json (Join-Path $e cpu-before-owned-termination.json) @(Get-Bo3JobIdentities);[CannonballLive]::KillOwned();$result.ownedStop=$true}
  $until=[DateTime]::UtcNow.AddSeconds(30);while([CannonballLive]::JobPids().Length-and[DateTime]::UtcNow-lt$until){[Threading.Thread]::Sleep(25)}
  $result.jobEmpty=[CannonballLive]::JobPids().Length-eq0
  if($result.jobEmpty){[CannonballLive]::ReleaseJob();if($cpuContext.lease){&$leaseTool -Exit -Name $leaseName|Out-File (Join-Path $e lease-exit.txt);$result.released=-not(Test-Path -LiteralPath $receipt)}}

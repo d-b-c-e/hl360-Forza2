@@ -6,7 +6,8 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
-// Native calls are made only by the explicit live executor. Pure policy tests do not call them.
+// Observation hooks are live-only. Explicit CPU/cheap executors also use the
+// own-job/identity APIs for inert tools; they do not start input hooks.
 public static class CannonballLive {
  public sealed class Identity { public int pid; public long birth, hwnd; public string image, kind; public string Key {get{return pid+":"+birth+":"+hwnd+":"+image;}} }
  public sealed class Event {public string utc,kind;public uint flags,tick;public bool injected;}
@@ -26,7 +27,7 @@ public static class CannonballLive {
  [StructLayout(LayoutKind.Sequential)]struct ExtendedLimit{public BasicLimit basic;public Io io;public UIntPtr processMemory,jobMemory,peakProcess,peakJob;}
  [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)]struct ProcessEntry{public uint size,usage,pid;public UIntPtr heap;public uint module,threads,parent;public int priority;public uint flags;[MarshalAs(UnmanagedType.ByValTStr,SizeConst=260)]public string name;}
  delegate IntPtr Hook(int code,IntPtr w,IntPtr l);
- static Hook keyHook=OnKey,mouseHook=OnMouse;static IntPtr kh,mh,job;static uint hookTid;static Thread pump,monitor;static ManualResetEvent ready=new ManualResetEvent(false);static object sync=new object();
+ static Hook keyHook=OnKey,mouseHook=OnMouse;static IntPtr kh,mh,job;static uint hookTid;static Thread pump,monitor;static ManualResetEvent ready=new ManualResetEvent(false);static object sync=new object();static List<IntPtr> heldProcessHandles=new List<IntPtr>();
  static List<Event> events=new List<Event>();static volatile string abort;static volatile bool active,stop,cleanup;static bool released,joined,reset,pending;static int physical,injected,startupResets,heartbeat,hookHeartbeat;static long lastHookBeat;static long ownedBirth;static int ownedPid;static Identity initial,current,activated;static string expectedImage;static long launchUtc,activationAt;static uint initialRaw,observed,pendingTick;static long pendingAt;
  static string displayInitial,displayCurrent;
  [DllImport("user32.dll")]static extern bool EnumDisplayMonitors(IntPtr dc,IntPtr clip,MonitorProc callback,IntPtr data);
@@ -94,6 +95,9 @@ public static class CannonballLive {
  [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern IntPtr CreateFile(string name,uint access,uint share,IntPtr security,uint mode,uint flags,IntPtr template);
  [DllImport("kernel32.dll",SetLastError=true)]static extern bool SetHandleInformation(IntPtr h,uint mask,uint flags);
  [DllImport("kernel32.dll",SetLastError=true)]static extern bool TerminateJobObject(IntPtr h,uint code);
+ [DllImport("kernel32.dll",SetLastError=true)]static extern bool WriteFile(IntPtr h,byte[] data,uint count,out uint written,IntPtr overlapped);
+ [DllImport("kernel32.dll",SetLastError=true)]static extern uint WaitForSingleObject(IntPtr h,uint milliseconds);
+ static void RefuseLaunch(ProcessInfo pi,IntPtr log,Identity id,string reason,int error){var bytes=Encoding.UTF8.GetBytes("[rejected-own-launch] pid="+id.pid+" birth="+id.birth+" image="+id.image+" reason="+reason+" win32="+error+"\n");uint written;if(!WriteFile(log,bytes,(uint)bytes.Length,out written,IntPtr.Zero)||written!=bytes.Length)throw new Exception("Cannot persist rejection; suspended own process retained: "+id.Key);TerminateProcess(pi.process,1);throw new Exception(reason+" win32="+error+"; suspended own PID terminated: "+id.Key);}
  [DllImport("user32.dll")]static extern bool EnumWindows(WindowProc callback,IntPtr parameter);
  [DllImport("user32.dll")]static extern bool IsWindowVisible(IntPtr h);
  delegate bool WindowProc(IntPtr h,IntPtr parameter);
@@ -101,9 +105,10 @@ public static class CannonballLive {
  public static Identity Launch(string exe,string cwd,string commandLine,string stdout,string stderr,bool game){if(job==IntPtr.Zero)CreateOwnedJob();var startup=new Startup();startup.size=(uint)Marshal.SizeOf(startup);startup.flags=0x100;var handles=new List<IntPtr>();ProcessInfo pi;
    try{startup.output=CreateFile(stdout,0x40000000,3,IntPtr.Zero,1,0x80,IntPtr.Zero);startup.error=CreateFile(stderr,0x40000000,3,IntPtr.Zero,1,0x80,IntPtr.Zero);startup.input=CreateFile("NUL",0x80000000,3,IntPtr.Zero,3,0x80,IntPtr.Zero);handles.Add(startup.output);handles.Add(startup.error);handles.Add(startup.input);foreach(var h in handles){if(h==new IntPtr(-1)||!SetHandleInformation(h,1,1))throw new Exception("Log handle setup failed");}
    if(!CreateProcess(exe,new StringBuilder(commandLine),IntPtr.Zero,IntPtr.Zero,true,4|0x08000000,IntPtr.Zero,cwd,ref startup,out pi))throw new Exception("CreateProcess failed: "+Marshal.GetLastWin32Error());
-   try{if(!AssignProcessToJobObject(job,pi.process)){TerminateProcess(pi.process,1);throw new Exception("Job assignment failed; suspended own PID terminated");}Identity id=ProcessIdentity((int)pi.pid);id.kind="suspended-process";if(!String.Equals(id.image,exe,StringComparison.OrdinalIgnoreCase)){TerminateProcess(pi.process,1);throw new Exception("Requested executable is an alias, not exact suspended process image");}if(game){ownedBirth=id.birth;ownedPid=id.pid;}if(ResumeThread(pi.thread)==0xffffffff){TerminateProcess(pi.process,1);throw new Exception("Resume failed");}return id;}finally{CloseHandle(pi.thread);CloseHandle(pi.process);}}
+   try{Identity id=ProcessIdentity((int)pi.pid);id.kind="suspended-process";if(!AssignProcessToJobObject(job,pi.process))RefuseLaunch(pi,startup.error,id,"Job assignment failed",Marshal.GetLastWin32Error());if(!String.Equals(id.image,exe,StringComparison.OrdinalIgnoreCase))RefuseLaunch(pi,startup.error,id,"Requested executable is an alias",0);if(game){ownedBirth=id.birth;ownedPid=id.pid;}if(ResumeThread(pi.thread)==0xffffffff)RefuseLaunch(pi,startup.error,id,"Resume failed",Marshal.GetLastWin32Error());return id;}finally{CloseHandle(pi.thread);heldProcessHandles.Add(pi.process);}}
    finally{foreach(var h in handles)if(h!=new IntPtr(-1))CloseHandle(h);}}
  public static void KillOwned(){if(job!=IntPtr.Zero&&!TerminateJobObject(job,98))throw new Exception("Owned job termination failed");}
  public static int[] JobPids(){if(job==IntPtr.Zero)return new int[0];int bytes=4096;while(bytes<=1048576){var data=Marshal.AllocHGlobal(bytes);try{int used;if(QueryInformationJobObject(job,3,data,bytes,out used)){int n=Marshal.ReadInt32(data,4);if(n<0||8+n*IntPtr.Size>bytes)throw new Exception("Invalid job census");var ids=new int[n];for(int i=0;i<n;i++)ids[i]=(int)(IntPtr.Size==8?Marshal.ReadInt64(data,8+i*8):Marshal.ReadInt32(data,8+i*4));return ids;}if(Marshal.GetLastWin32Error()!=234)throw new Exception("Job census failed");}finally{Marshal.FreeHGlobal(data);}bytes*=2;}throw new Exception("Job census exceeded bound");}
- public static void ReleaseJob(){if(JobPids().Length!=0)throw new Exception("Owned children still active");if(job!=IntPtr.Zero){CloseHandle(job);job=IntPtr.Zero;}}
+ public static int RetainedProcessHandles(){return heldProcessHandles.Count;}
+ public static void ReleaseJob(){if(JobPids().Length!=0)throw new Exception("Owned children still active");foreach(var h in heldProcessHandles)if(WaitForSingleObject(h,0)!=0)throw new Exception("Own launched process still active/uncontained; custody retained");foreach(var h in heldProcessHandles)CloseHandle(h);heldProcessHandles.Clear();if(job!=IntPtr.Zero){CloseHandle(job);job=IntPtr.Zero;}}
 }

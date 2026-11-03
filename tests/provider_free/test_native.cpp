@@ -26,6 +26,14 @@ int main(int argc,char** argv) {
   REXCVAR_SET(provider_free,true);
   REXCVAR_SET(provider_free_root,fixture_root);
   REXCVAR_SET(provider_free_nonce,"0123456789abcdef0123456789abcdef");
+  const auto private_live=std::filesystem::path(fixture_root)/"live";
+  REXCVAR_SET(provider_free_root,private_live.string());
+  rex::PathConfig paths;paths.user_data_root="C:/owner-sentinel";paths.update_data_root="C:/owner-update";
+  PrivatePaths(paths,private_live/"bin");
+  CHECK(paths.user_data_root==std::filesystem::path(fixture_root)/"user"&&paths.cache_root==std::filesystem::path(fixture_root)/"cache");
+  CHECK(paths.game_data_root==std::filesystem::path(fixture_root)/"data"&&paths.update_data_root.empty());
+  bool refused=false;try{PrivatePaths(paths,std::filesystem::path(fixture_root)/"owner-bin");}catch(const std::runtime_error&){refused=true;}CHECK(refused);
+  REXCVAR_SET(provider_free_root,fixture_root);
   rex::RuntimeConfig config; Configure(config); CHECK(config.input_factory&&config.audio_factory);
   REXCVAR_SET(provider_free,false);CHECK(Enabled()); // One-way latch survives a late flag edit.
   rex::runtime::FunctionDispatcher dispatcher(nullptr,nullptr);
@@ -39,7 +47,7 @@ int main(int argc,char** argv) {
   output->SubmitFrame(0xdeadbeef); // Must never read samples or open a device.
   CHECK(audio_systems.load()==1&&audio_drivers.load()==1&&audio_frames.load()==1&&audio_failures.load()==0);
   silent->DestroyDriver(output);audio.reset();
-  auto input=config.input_factory(false); CHECK(input->Setup()==0);
+  auto input=config.input_factory(false); CHECK(input_systems.load()==1&&input->Setup()==0);
   auto* actual=static_cast<rex::input::InputSystem*>(input.get());
   rex::input::X_INPUT_STATE host_state{};
   CHECK(actual->GetState(0,&host_state)==1167);

@@ -9,6 +9,29 @@ Source branch: `napo/forza2-provider-free-20261103`, isolated worktree
 `8cb28bca616ef5358f9f0ab7e67fff791f36efde`.
 Coordinator request504092 selected FM2 after FM3's read-only prerequisite audit.
 
+CPU504842 failed before copying/building: real vcvars spawned a registry-query
+child outside the old allowlist, then an exiting cmd masked the first refusal.
+The setup job was explicitly terminated and fully released; original cpu01
+receipts/logs remain unchanged. No candidate or game was built/run.
+Request504865 repairs that seam: the complete cheap suite now runs the actual
+vswhere/vcvars launcher under owned-job census, real tool versions, the exact
+candidate CMake configure (tiny compiler/Threads probes only), and `ninja -n -v`
+of that generated tree. Allowed CPU image pins come from observed identities
+and roles across both final passes, not a guessed list. Source-supported
+`VSCMD_SKIP_SENDTELEMETRY=1` is child-local. Long/8.3 Ninja and SysWOW64 cmd are
+recorded separately when actually observed. The explicit
+`FORZA2_USE_COMMITTED_GENERATED=ON` mode makes the codegen target empty;
+the real dry-run confirms no translator/codegen command and no game EXE.
+The ordinary default still uses codegen. No generated guest C++ was changed.
+
+Cleanup tolerates children that exit during census and records the first
+refusal verbatim. Twenty rapid-exit child cases and helper-only/whole-job
+failure accounting exercise the production helper. Launched process handles
+are retained until an empty/signaled job release so very short version tools
+cannot disappear before their exit/identity can be read. Observation hooks
+remain live-only. Both actual isolated input-system and silent audio-system
+constructor counters must be1 in a future live witness.
+
 Installed FM2 EXE remains
 `95E74E3DCD4EA5AB3A50A4DD0363561DCD1211D4BA05C0D19CEC9F2015A69A50`
 (46,051,328 bytes). Its user TOML selects SDL, keyboard emulation and fullscreen
@@ -16,14 +39,19 @@ and points through the historical LaunchBox alias; do not run that configuration
 for this case. Owner profiles `dbce` and `Player` live under
 `C:\Users\antho\Documents\forza2\profiles`. Genuine importer log records2344
 files/5.03GB and zero missing/size/hash mismatches. No owner install receipt is
-invented or changed. Current source SDK package0.10.0 has runtime
-`E359209F...` and GPU `0C23CFA2...`; these differ from the historical installed
-tuple and will be identified separately in the candidate receipt.
+invented or changed. Fresh hashes confirm package0.10.0 and the installed copy
+have the same runtime
+`E359209FB2B0570E693C966D4C1D99A82465D36EF70D033833FAE56ADB2F1B7A`
+and GPU `0C23CFA23FC4FA5638DC8A3DC0DE87B1041D97705D4677774083F1F350CD8D89`.
+The earlier differing-DLL-tuple statement was incorrect. The candidate reuses
+these pinned DLLs with a new private EXE; no SDK upgrade/install follows.
 
 ## Source behavior
 
 - `--provider_free=true` is a one-way latch selected before backend construction.
-  The real SDK InputSystem has zero drivers. Actual guest slot0 gets only the
+  The real SDK InputSystem has zero drivers and a constructor witness. Private
+  data/user/cache/metadata roots are forced from the live/bin layout after config
+  loads and before Runtime/logging; an unrelated layout is refused. Guest slot0 gets only the
   private native pad command; capabilities/keystrokes/rumble cannot touch a pad.
 - The silent audio system supplies a real successful guest render-client
   driver and acknowledges256-sample frames at48kHz on the SDK's existing worker.
@@ -45,7 +73,7 @@ tuple and will be identified separately in the candidate receipt.
 ## Admission and evidence
 
 `tools/provider-free/Cheap.ps1` is the complete no-lease/no-game/no-hook/no-device
-scratch suite. It exercises90 actual native consumer/export/factory/driver
+scratch suite. It exercises93 actual native consumer/export/factory/driver
 checks, the real data clone/2344-member alternative-hash verifier, typed
 Build/Run positive and refusal paths, actual host-header/Present syntax, the
 production concurrent IO,29 sparse/metadata/lifecycle checks with an independent

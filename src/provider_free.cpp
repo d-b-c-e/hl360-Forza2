@@ -10,6 +10,7 @@
 #include <string>
 #include <windows.h>
 #include <rex/cvar.h>
+#include <rex/rex_app.h>
 #include <rex/input/input_system.h>
 #include <rex/audio/audio_system.h>
 #include <rex/audio/audio_driver.h>
@@ -38,6 +39,7 @@ std::function<void()> close_callback;
 uint64_t started = 0, accepted = 0, published = 0, reads = 0, frames = 0;
 uint64_t consumed_seq = 0, consumed = 0, packet = 0, birth = 0;
 std::atomic<uint64_t> network_calls{0}, force_calls{0};
+std::atomic<uint64_t> input_systems{0};
 std::atomic<uint64_t> audio_systems{0}, audio_drivers{0}, audio_frames{0}, audio_failures{0};
 bool configured = false, running = false, close_sent = false;
 
@@ -116,11 +118,11 @@ void Publish(bool final = false) {
   char text[2048];
   std::snprintf(text, sizeof text,
     "{\"schema\":\"fm2.provider-free@1\",\"nonce\":\"%s\",\"pid\":%lu,\"birthFileTime\":%llu,"
-    "\"noHost\":true,\"controllers\":0,\"networkBlocked\":true,\"audio\":\"silent-ack\","
+    "\"noHost\":true,\"controllers\":0,\"inputSystems\":%llu,\"networkBlocked\":true,\"audio\":\"silent-ack\","
     "\"seq\":%llu,\"consumedSeq\":%llu,\"consumed\":%llu,\"frames\":%llu,\"networkCalls\":%llu,"
     "\"forceCalls\":%llu,\"audioSystems\":%llu,\"audioDrivers\":%llu,\"audioFrames\":%llu,\"audioFailures\":%llu,\"buttons\":%d,\"lt\":%d,\"rt\":%d,\"lx\":%d,"
     "\"elapsedMs\":%llu,\"closing\":%s,\"final\":%s,\"reason\":\"%s\"}\n",
-    nonce.c_str(),GetCurrentProcessId(),birth,command.seq,consumed_seq,consumed,frames,
+    nonce.c_str(),GetCurrentProcessId(),birth,input_systems.load(),command.seq,consumed_seq,consumed,frames,
     network_calls.load(),force_calls.load(),audio_systems.load(),audio_drivers.load(),audio_frames.load(),audio_failures.load(),command.buttons,command.lt,command.rt,command.lx,
     now-started,close_sent?"true":"false",final?"true":"false",reason.c_str());
   unsigned long error = 0;
@@ -150,12 +152,24 @@ void Configure(rex::RuntimeConfig& config) {
   if (!Enabled()) return;
   // Real SDK type, with ZERO drivers; ReXApp's AttachWindow/static_cast remains valid.
   config.input_factory = [](bool) -> std::unique_ptr<rex::system::IInputSystem> {
+    ++input_systems;
     return std::make_unique<rex::input::InputSystem>(nullptr);
   };
   config.audio_factory = [](rex::runtime::FunctionDispatcher* dispatcher) -> std::unique_ptr<rex::system::IAudioSystem> {
     return std::make_unique<SilentAudioSystem>(dispatcher);
   };
   configured = true;
+}
+void PrivatePaths(rex::PathConfig& paths,const std::filesystem::path& executable_folder) {
+  if(!Enabled()) return;
+  const auto bin=executable_folder.lexically_normal(),live=bin.parent_path();
+  if(bin.filename()!="bin"||live.filename()!="live"||
+     std::filesystem::path(REXCVAR_GET(provider_free_root)).lexically_normal()!=live)
+    throw std::runtime_error("Qualification requires its exact private live/bin layout");
+  const auto parent=live.parent_path();
+  paths.game_data_root=parent/"data";paths.user_data_root=parent/"user";
+  paths.cache_root=parent/"cache";paths.metadata_root=live/"metadata";
+  paths.update_data_root.clear();paths.config_path=bin/"forza2.user.toml";
 }
 void Start(std::function<void()> close) {
   if (!Enabled()) return;

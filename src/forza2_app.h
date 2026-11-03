@@ -79,6 +79,10 @@ class Forza2App : public rex::ReXApp {
     if (std::string(REXCVAR_GET(user_data_root)).empty()) {
       paths.user_data_root = forza2::ProfileUserDataRoot(paths.user_data_root);
     }
+    // Qualification roots come from the private executable layout, after both
+    // config loads and before Runtime/logging can write. Inherited path defaults
+    // cannot redirect this opt-in case into the owner's profile/cache.
+    forza2::qualification::PrivatePaths(paths,rex::filesystem::GetExecutableFolder());
     user_data_root_ = paths.user_data_root;
     game_data_root_ = paths.game_data_root;
   }

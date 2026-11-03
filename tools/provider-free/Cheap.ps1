@@ -8,12 +8,13 @@ $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot JobPolicy.ps1)
 . (Join-Path $PSScriptRoot Environment.ps1)
 . (Join-Path $PSScriptRoot Data.ps1)
+. (Join-Path $PSScriptRoot Toolchain.ps1)
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot ../..));$Evidence=[IO.Path]::GetFullPath($Evidence)
 if(-not(Test-ReadbackWithin $Evidence (Join-Path $root _local/provider-free))-or(Test-Path $Evidence)){throw 'Fresh project scratch required'}
 Assert-ReadbackPlain $Evidence;[void][IO.Directory]::CreateDirectory($Evidence)
 $r=[ordered]@{pass=$false;game=$false;hooks=$false;device=$false;owner=$false;lease=$false;failure=$null}
 $r.sourcePins=@(Get-Bo3Rows $PSScriptRoot)+@(Get-Bo3Rows (Join-Path $root src) | Where-Object path -match 'provider_free|scripted_input|frame_stats|forza2_app')+@(Get-Bo3Rows (Join-Path $root tests/provider_free))
-$r.sourcePins+=@{path=(Join-Path $root CMakeLists.txt);bytes=(Get-Item (Join-Path $root CMakeLists.txt)).Length;sha256=(Get-ReadbackSha (Join-Path $root CMakeLists.txt))}
+foreach($file in @('CMakeLists.txt','generated/rexglue.cmake')){$r.sourcePins+=@{path=(Join-Path $root $file);bytes=(Get-Item (Join-Path $root $file)).Length;sha256=(Get-ReadbackSha (Join-Path $root $file))}}
 try{
  foreach($row in @(@('CannonballLive.cs','Guard.dll'),@('Snapshot.cs','Snapshot.dll'),@('OwnerIo.cs','OwnerIo.dll'))){$out=Join-Path $Evidence $row[1];Add-Type -Path (Join-Path $PSScriptRoot $row[0]) -OutputAssembly $out;[void][Reflection.Assembly]::LoadFrom($out)}
  $pwsh=[CannonballLive]::ProcessIdentity($PID).image
@@ -58,9 +59,14 @@ try{
  if($calls.count-lt1-or-not$calls.shadowObserved){throw 'Actual helper executable-shadow regression did not execute'}
  $helperStopped=$false;try{Invoke-Bo3Owned $helperExe @('helper') $root intentional-helper-only-stop $Evidence 10 {throw 'inert helper-only failure'} $false|Out-Null}catch{$helperStopped=$_.Exception.Message-eq'inert helper-only failure'}
  if(-not$helperStopped-or$consoleProcess.HasExited){throw 'Helper-only stop killed or lost unrelated owned root'};$r.helperOnlyStopPreservesRoot=$true
+ $helperStop=(Read-Bo3Text (Join-Path $Evidence intentional-helper-only-stop.before-owned-termination.json))|ConvertFrom-Json
+ if($helperStop.firstFailure-cne'inert helper-only failure'-or$helperStop.scope-cne'helper-only'){throw 'Cleanup masked the first refusal'};$r.firstRefusalVerbatim=$true
+ foreach($n in 0..19){$label='rapid-exit-'+$n;$fast=[CannonballLive]::Launch($helperExe,$Evidence,(Join-Bo3Command @($helperExe,'fast')),(Join-Path $Evidence ($label+'.stdout.txt')),(Join-Path $Evidence ($label+'.stderr.txt')),$false);[void]@(Get-Bo3JobIdentities)}
+ $r.rapidExitCensuses=20
  $rolePlan=@{python=$consoleExe;candidate=(Join-Path $Evidence unused-game.exe);capture=(Join-Path $Evidence unused-capture.exe);consoleHost=$consoleHost};$seen=@{};$until=[DateTime]::UtcNow.AddSeconds(8)
  try{do{Get-Bo3JobCensus $consoleRoot $rolePlan $seen (Join-Path $Evidence console-identities.json);if($consoleProcess.WaitForExit(20)-and-not[CannonballLive]::JobPids().Length){break};if($consoleProcess.HasExited){[Threading.Thread]::Sleep(20)};if([DateTime]::UtcNow-gt$until){throw 'Inert console child deadline'}}while($true);if($consoleProcess.ExitCode){throw 'Inert console exit failed'}}finally{$consoleProcess.Dispose()}
  if([CannonballLive]::JobPids().Length){throw 'Inert console job not empty'};[CannonballLive]::ReleaseJob()
+ if([CannonballLive]::RetainedProcessHandles()-ne0){throw 'Own fast-exit root handles leaked'}
  $cases=@(@(@{pid=$consoleRoot.pid;birth=$consoleRoot.birth;image=$consoleExe},'root'),@(@{pid=1;birth=$consoleRoot.birth+1;image=$consoleHost},'console-host'),@(@{pid=1;birth=$consoleRoot.birth-1;image=$consoleHost},'unknown-epoch'),@(@{pid=1;birth=$consoleRoot.birth+1;image=(Join-Path $Evidence conhost.exe)},'unknown-image'),@(@{pid=$consoleRoot.pid+1;birth=$consoleRoot.birth+1;image=$consoleExe},'unknown-python'),@(@{pid=1;birth=$consoleRoot.birth+1;image=$rolePlan.capture},'capture'))
  foreach($case in $cases){if((Get-OwnedJobRole $case[0] $consoleRoot $rolePlan)-cne$case[1]){throw 'Production console policy case failed'}}
  $r.consoleIdentities=@($seen.Values);$r.jobPolicyCases=$cases.Count;$r.consoleHostSha256=Get-ReadbackSha $consoleHost
@@ -72,7 +78,7 @@ try{
  $imports=@(Select-String -LiteralPath (Join-Path $root generated/default/forza2_init.cpp) -Pattern '\{ 0x[0-9A-F]+, __imp__(NetDll_\w+) \}'|ForEach-Object{$_.Matches[0].Groups[1].Value}|Sort-Object -Unique)
  $fences=@(Select-String -LiteralPath (Join-Path $root src/provider_free_network.def) -Pattern '^FM2_NET\((\w+),'|ForEach-Object{$_.Matches[0].Groups[1].Value}|Sort-Object -Unique)
  if($imports.Count-ne40-or(Compare-Object $imports $fences)){throw 'Compiled network import fence incomplete'};$r.networkImports=$imports
- Set-Fm2BuildEnvironment $Evidence
+ $r.toolchain=Invoke-Fm2ToolchainSmoke $root $Evidence 'E:\Source\game-modding\dbce-mods-forza-motorsport-2\_sdk\win-amd64'
  $msvcTools=Get-Fm2MsvcTools $Evidence
  if($msvcTools-isnot[hashtable]-or$msvcTools.Count-ne3){throw 'Actual CPU-plan MSVC tool extraction failed'}
  foreach($name in @('link','rc','mt')){if(-not(Test-Path -LiteralPath $msvcTools[$name])-or$msvcTools[$name]-cne[IO.Path]::GetFullPath($msvcTools[$name])){throw 'Actual MSVC canonical tool path missing'}};$r.actualMsvcToolPaths=$msvcTools
@@ -92,7 +98,7 @@ try{
  $r.rehearsal=Get-Content (Join-Path $Evidence rehearsal/result.json) -Raw|ConvertFrom-Json
  $r.pass=$true
 }catch{$r.failure=$_.Exception.ToString();throw}finally{
- if('CannonballLive'-as[type]){if([CannonballLive]::JobPids().Length){Write-Bo3Json (Join-Path $Evidence cleanup-identities.json) @([CannonballLive]::JobPids()|ForEach-Object{[CannonballLive]::ProcessIdentity($_)});[CannonballLive]::KillOwned()};$until=[DateTime]::UtcNow.AddSeconds(5);while([CannonballLive]::JobPids().Length-and[DateTime]::UtcNow-lt$until){[Threading.Thread]::Sleep(20)};if(-not[CannonballLive]::JobPids().Length){[CannonballLive]::ReleaseJob()}}
+ if('CannonballLive'-as[type]){if([CannonballLive]::JobPids().Length){Write-Bo3Json (Join-Path $Evidence cleanup-identities.json) @(Get-Bo3JobIdentities);[CannonballLive]::KillOwned()};$until=[DateTime]::UtcNow.AddSeconds(5);while([CannonballLive]::JobPids().Length-and[DateTime]::UtcNow-lt$until){[Threading.Thread]::Sleep(20)};if(-not[CannonballLive]::JobPids().Length){[CannonballLive]::ReleaseJob()}}
  if('OutRunSnapshot'-as[type]){Write-Bo3Json (Join-Path $Evidence result.json) $r}
 }
 @{pass=$r.pass;failure=$r.failure;native=$r.native;rehearsalChecks=$r.rehearsal.checks;jobPolicyCases=$r.jobPolicyCases;helperOnlyStopPreservesRoot=$r.helperOnlyStopPreservesRoot;evidence=$Evidence}|ConvertTo-Json -Depth 4

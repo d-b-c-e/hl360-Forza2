@@ -3,6 +3,7 @@
 namespace forza2::qualification {
 bool Enabled(){return false;}
 void Configure(rex::RuntimeConfig&){}
+void PrivatePaths(rex::PathConfig&,const std::filesystem::path&){}
 void Start(std::function<void()>){ }
 void Stop(){}
 void Frame(){}

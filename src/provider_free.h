@@ -1,12 +1,15 @@
 #pragma once
 #include <cstdint>
 #include <functional>
+#include <filesystem>
 #include <rex/runtime.h>
+namespace rex {struct PathConfig;}
 
 namespace forza2::qualification {
 // Off by default. Selected before any input backend is constructed.
 bool Enabled();
 void Configure(rex::RuntimeConfig& config);
+void PrivatePaths(rex::PathConfig& paths,const std::filesystem::path& executable_folder);
 void Start(std::function<void()> close);
 void Stop();
 void Frame();

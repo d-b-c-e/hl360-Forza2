@@ -24,7 +24,7 @@ function Read-Bo3Status([string]$Path,[string]$Nonce,$Identity){
  $text=Read-Bo3Text $Path;if($null-eq$text){return $null}
  try{$s=$text|ConvertFrom-Json -DateKind String}catch{return $null}
  if($s.schema-cne'fm2.provider-free@1'-or$s.nonce-cne$Nonce-or$s.pid-ne$Identity.pid-or[long]$s.birthFileTime-ne($Identity.birth-504911232000000000L)){throw 'Status identity differs'}
- if(-not$s.noHost-or$s.controllers-ne0-or-not$s.networkBlocked-or$s.audio-cne'silent-ack'-or$s.audioSystems-ne1-or$s.audioFailures-or$s.reason){throw ('Native output fence failed: '+$s.reason)}
+ if(-not$s.noHost-or$s.controllers-ne0-or$s.inputSystems-ne1-or-not$s.networkBlocked-or$s.audio-cne'silent-ack'-or$s.audioSystems-ne1-or$s.audioFailures-or$s.reason){throw ('Native output fence failed: '+$s.reason)}
  return $s
 }
 function Get-Bo3Rows([string]$Root){@(Get-ChildItem -LiteralPath $Root -File -Recurse -Force|Sort-Object FullName|ForEach-Object{Assert-ReadbackPlain $_.FullName;@{path=$_.FullName;bytes=$_.Length;sha256=(Get-ReadbackSha $_.FullName)}})}
@@ -36,6 +36,14 @@ function Assert-Bo3GameIdentity($Observed,$HeldRoot,[int[]]$JobPids){
  if($Observed.pid-ne$HeldRoot.pid-or$Observed.birth-ne$HeldRoot.birth-or$Observed.image-ine$HeldRoot.image-or$HeldRoot.pid-notin$JobPids){throw 'Game PID/birth/image/job differs'}
 }
 function Get-Bo3OwnedStopReceipts([string]$Evidence){@(Get-ChildItem -LiteralPath $Evidence -File -Filter '*.before-owned-termination.json'|ForEach-Object{@{path=$_.FullName;sha256=(Get-ReadbackSha $_.FullName)}})}
+function Get-Bo3JobIdentities {
+ foreach($childId in @([CannonballLive]::JobPids())){
+  try{[CannonballLive]::ProcessIdentity($childId)}catch{
+   $still=Get-Process -Id $childId -ErrorAction SilentlyContinue
+   if($still){try{if(-not$still.HasExited){throw}}finally{$still.Dispose()}}
+  }
+ }
+}
 function Get-Bo3JobCensus($RootIdentity,$RolePlan,[hashtable]$Seen,[string]$EvidenceFile){
  # JobPolicy.ps1 is remi's unchanged cbf04107 classifier. Only query handles
  # already returned from this fresh job, and persist identity BEFORE refusal.
@@ -49,9 +57,12 @@ function Get-Bo3JobCensus($RootIdentity,$RolePlan,[hashtable]$Seen,[string]$Evid
 function Join-Bo3Command([string[]]$Words){
  (@(foreach($word in $Words){$b=[Text.StringBuilder]::new('"');$slashes=0;foreach($c in $word.ToCharArray()){if($c-eq'\'){$slashes++;continue};if($c-eq'"'){[void]$b.Append(('\'*(2*$slashes+1)))}else{[void]$b.Append(('\'*$slashes))};$slashes=0;[void]$b.Append($c)};[void]$b.Append(('\'*(2*$slashes)));[void]$b.Append('"');$b.ToString()})-join' ')
 }
-function Invoke-Bo3Owned([string]$Exe,[string[]]$Arguments,[string]$Cwd,[string]$Label,[string]$Evidence,[int]$Seconds,[scriptblock]$Tick,[bool]$KillWholeJobOnFailure=$true){
+function Invoke-Bo3Owned([string]$Exe,[string[]]$Arguments,[string]$Cwd,[string]$Label,[string]$Evidence,[int]$Seconds,[scriptblock]$Tick,[bool]$KillWholeJobOnFailure=$true,[int]$PollMs=40){
+ if($PollMs-lt5-or$PollMs-gt200){throw 'Owned helper polling bound differs'}
  $id=[CannonballLive]::Launch($Exe,$Cwd,(Join-Bo3Command (@($Exe)+$Arguments)),(Join-Path $Evidence ($Label+'.stdout.txt')),(Join-Path $Evidence ($Label+'.stderr.txt')),$false)
- $p=Get-Process -Id $id.pid -ErrorAction Stop;$null=$p.Handle;$clock=[Diagnostics.Stopwatch]::StartNew()
- try{while(-not$p.WaitForExit(40)){if($Tick){&$Tick};if($clock.Elapsed.TotalSeconds-gt$Seconds){throw ('Owned helper deadline: '+$Label)}};if($p.ExitCode){throw ('Owned helper failed: '+$Label+' exit '+$p.ExitCode)};return $id}
- finally{if(-not$p.HasExited){$census=@([CannonballLive]::JobPids()|ForEach-Object{[CannonballLive]::ProcessIdentity($_)});Write-Bo3Json (Join-Path $Evidence ($Label+'.before-owned-termination.json')) @{scope=$(if($KillWholeJobOnFailure){'whole-job'}else{'helper-only'});root=$id;members=$census};if($KillWholeJobOnFailure){[CannonballLive]::KillOwned()}else{Assert-Bo3GameIdentity ([CannonballLive]::ProcessIdentity($id.pid)) $id ([CannonballLive]::JobPids());$p.Kill()};if(-not$p.WaitForExit(5000)){throw 'Owned process termination incomplete'}};$p.Dispose()}
+ Write-Bo3Json (Join-Path $Evidence ($Label+'.identity.json')) $id
+ $p=Get-Process -Id $id.pid -ErrorAction Stop;$null=$p.Handle;$clock=[Diagnostics.Stopwatch]::StartNew();$firstFailure=$null
+ try{while(-not$p.WaitForExit($PollMs)){if($Tick){&$Tick};if($clock.Elapsed.TotalSeconds-gt$Seconds){throw ('Owned helper deadline: '+$Label)}};if($Tick){&$Tick};if($p.ExitCode){throw ('Owned helper failed: '+$Label+' exit '+$p.ExitCode)};return $id}
+ catch{$firstFailure=$_.Exception.Message;throw}
+ finally{try{if(-not$p.HasExited){$census=@(Get-Bo3JobIdentities);Write-Bo3Json (Join-Path $Evidence ($Label+'.before-owned-termination.json')) @{scope=$(if($KillWholeJobOnFailure){'whole-job'}else{'helper-only'});root=$id;members=$census;firstFailure=$firstFailure};if($KillWholeJobOnFailure){[CannonballLive]::KillOwned()}else{Assert-Bo3GameIdentity ([CannonballLive]::ProcessIdentity($id.pid)) $id ([CannonballLive]::JobPids());$p.Kill()};if(-not$p.WaitForExit(5000)){throw 'Owned process termination incomplete'}}}catch{if($firstFailure){Write-Bo3Json (Join-Path $Evidence ($Label+'.cleanup-error.json')) @{firstFailure=$firstFailure;cleanupFailure=$_.Exception.Message};throw $firstFailure};throw}finally{$p.Dispose()}}
 }

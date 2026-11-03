@@ -9,6 +9,7 @@ enable_language(C)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(FORZA2_USE_COMMITTED_GENERATED "Use the verified committed guest sources without running codegen" OFF)
 include(generated/rexglue.cmake)
 
 # The build runs `rexglue codegen` on assets/default.xex first. The game is not
