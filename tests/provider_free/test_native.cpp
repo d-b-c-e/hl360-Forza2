@@ -22,7 +22,10 @@ extern "C" void __imp__XamInputGetKeystroke(PPCContext&,uint8_t*);
 unsigned checks;
 #define CHECK(condition) do {++checks;if(!(condition)){std::fprintf(stderr,"line %d: %s\n",__LINE__,#condition);return 1;}}while(0)
 int main(int argc,char** argv) {
-  CHECK(argc==2);
+  SetErrorMode(SEM_FAILCRITICALERRORS|SEM_NOGPFAULTERRORBOX|SEM_NOOPENFILEERRORBOX);
+  CHECK(argc==2||argc==3);
+  const std::string close_case=argc==3?argv[2]:"";
+  CHECK(close_case.empty()||close_case=="quit"||close_case=="stale");
   using namespace forza2::qualification;
   using rex::X_STATUS;
   const std::string fixture_root=argv[1];
@@ -81,13 +84,48 @@ int main(int argc,char** argv) {
   auto wrong=make(1,0,0,0,0,0);wrong.replace(wrong.find("012345"),6,"abcdef");CHECK(!Parse(wrong.c_str(),parsed));
   auto publish=[&](const std::string& text){unsigned long error=0;return fm2_pf_publish((fixture_root+"/command.txt").c_str(),text.c_str(),&error);};
   CHECK(publish(make(1,4096,127,255,-16000,0)));
-  int closes=0;Start([&]{++closes;});
+  int closes=0;bool callback_reentered=false;
+  Start([&]{
+    ++closes;
+    if(!close_case.empty()){
+      uint32_t again=0;
+      // Real re-entry must acquire the same mutex and return for user1.
+      // A callback invoked under the consumer lock would deadlock this fixture.
+      callback_reentered=Input(1,0,memory.data(),again)&&again==1167;
+    }
+  });
   PPCContext ctx{};ctx.r3.u32=0;ctx.r5.u32=0x1000;
   __imp__XamInputGetState(ctx,memory.data());CHECK(ctx.r3.u32==0);
   auto* pad=reinterpret_cast<rex::input::X_INPUT_STATE*>(memory.data()+0x1000);
   CHECK(uint16_t(pad->gamepad.buttons)==4096&&pad->gamepad.right_trigger==255&&
         pad->gamepad.left_trigger==127&&int16_t(pad->gamepad.thumb_lx)==-16000);
   CHECK(uint32_t(pad->packet_number)==1);
+  if(!close_case.empty()){
+    bool published_quit=true,during_present=false,neutral=false;
+    fixture_present_probe=[&]{
+      if(close_case=="quit"){
+        // Even an active quit packet must become neutral before normal close.
+        published_quit=publish(make(2,4096,127,255,-16000,1));Sleep(25);
+      }else Sleep(1600); // Existing1500ms stale bound; no native deadline edit.
+      ctx.r3.u32=0;ctx.r5.u32=0x1000;__imp__XamInputGetState(ctx,memory.data());
+      during_present=frames==1&&present_returns==0&&closes==1;
+      neutral=uint16_t(pad->gamepad.buttons)==0&&pad->gamepad.left_trigger==0&&
+        pad->gamepad.right_trigger==0&&int16_t(pad->gamepad.thumb_lx)==0;
+    };
+    sub_8236CB28(ctx,memory.data());fixture_present_probe={};
+    std::printf("{\"case\":\"%s\",\"closes\":%d,\"duringPresent\":%s,\"neutral\":%s,\"reentered\":%s,\"frames\":%llu,\"returns\":%llu}\n",
+      close_case.c_str(),closes,during_present?"true":"false",neutral?"true":"false",
+      callback_reentered?"true":"false",frames,present_returns);
+    if(!published_quit||!during_present||!neutral||!callback_reentered){
+      std::fprintf(stderr,"FM2_NATIVE_CLOSE_DELIVERY %s\n",close_case.c_str());return 1;
+    }
+    CHECK(present_returns==1&&original_present_calls==1);
+    CHECK(close_case=="quit"?reason.empty():reason=="command-stale");
+    for(int n=0;n<3;++n){ctx.r3.u32=0;ctx.r5.u32=0x1000;__imp__XamInputGetState(ctx,memory.data());Frame();}
+    CHECK(closes==1);Stop();
+    std::printf("{\"pass\":true,\"case\":\"%s\",\"checks\":%u,\"closeOnce\":true,\"callbackOutsideMutex\":true,\"game\":false}\n",close_case.c_str(),checks);
+    return 0;
+  }
   bool observed_in_flight=false;
   unsigned long in_flight_read_error=0;std::string in_flight_status;
   // GetTickCount64 can advance in coarse ticks. Wait on that same clock;
