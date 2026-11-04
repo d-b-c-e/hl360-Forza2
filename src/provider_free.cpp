@@ -111,6 +111,9 @@ void Poll() {
   if (now - accepted > 1500) {command = {}; Fail("command-stale");}
   if (now - started > 540000) Fail("native-deadline");
   if (audio_failures.load()) Fail("silent-audio-ack");
+  if (command.quit) {
+    command.buttons=command.lt=command.rt=command.lx=command.ly=command.rx=command.ry=0;
+  }
 }
 void Publish(bool final = false) {
   auto now = GetTickCount64();
@@ -142,6 +145,14 @@ void Trace() {
 }
 bool Pointer(uint32_t pointer, unsigned size) {
   return pointer >= 0x1000 && uint64_t(pointer) + size <= 0x100000000ull;
+}
+// Called with mutex held; invoke the returned callback only after unlocking.
+std::function<void()> TakeCloseRequest() {
+  if ((!reason.empty() || command.quit) && !close_sent) {
+    close_sent = true;
+    return close_callback;
+  }
+  return {};
 }
 }
 bool Enabled() {
@@ -200,32 +211,37 @@ void Frame() {
     std::lock_guard lock(mutex);
     if (!running) return;
     ++frames; Poll();
-    if ((!reason.empty() || command.quit) && !close_sent) {close_sent = true; close = close_callback;}
+    close = TakeCloseRequest();
     Publish();
   }
   if (close) close();
 }
 bool Input(uint32_t user, uint32_t pointer, uint8_t* base, uint32_t& result) {
   if (!Enabled()) return false;
-  std::lock_guard lock(mutex);
-  result = 1167;
-  if (!running || user || !Pointer(pointer,16)) return true;
-  Poll();
-  auto* state = reinterpret_cast<rex::input::X_INPUT_STATE*>(base+pointer);
-  std::memset(state,0,sizeof *state);
-  state->packet_number = uint32_t(++packet);
-  if (reason.empty()) {
-    state->gamepad.buttons = uint16_t(command.buttons);
-    state->gamepad.left_trigger = uint8_t(command.lt); state->gamepad.right_trigger = uint8_t(command.rt);
-    state->gamepad.thumb_lx = int16_t(command.lx); state->gamepad.thumb_ly = int16_t(command.ly);
-    state->gamepad.thumb_rx = int16_t(command.rx); state->gamepad.thumb_ry = int16_t(command.ry);
+  std::function<void()> close;
+  {
+    std::lock_guard lock(mutex);
+    result = 1167;
+    if (!running || user || !Pointer(pointer,16)) return true;
+    Poll();
+    close = TakeCloseRequest();
+    auto* state = reinterpret_cast<rex::input::X_INPUT_STATE*>(base+pointer);
+    std::memset(state,0,sizeof *state);
+    state->packet_number = uint32_t(++packet);
+    if (reason.empty()) {
+      state->gamepad.buttons = uint16_t(command.buttons);
+      state->gamepad.left_trigger = uint8_t(command.lt); state->gamepad.right_trigger = uint8_t(command.rt);
+      state->gamepad.thumb_lx = int16_t(command.lx); state->gamepad.thumb_ly = int16_t(command.ly);
+      state->gamepad.thumb_rx = int16_t(command.rx); state->gamepad.thumb_ry = int16_t(command.ry);
+    }
+    ++consumed;
+    if (command.seq != consumed_seq) {consumed_seq = command.seq; Trace();}
+    // Preserve the shared80ms cap. A live input consumer also delivers normal
+    // close while Present is in flight; it does not make the GPU return.
+    Publish();
+    result = 0;
   }
-  ++consumed;
-  if (command.seq != consumed_seq) {consumed_seq = command.seq; Trace();}
-  // Keep input/audio liveness observable while a Present is in flight or the
-  // title is loading without entering Present. Shares the existing80ms cap.
-  Publish();
-  result = 0;
+  if (close) close();
   return true;
 }
 void PresentReturned() {
